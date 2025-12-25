@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ライブ配信</title>
+  <meta name="description" content="YouTubeライブ配信の埋め込み視聴ページです。" />
+
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+      line-height: 1.6;
+    }
+    header {
+      padding: 16px 16px 8px;
+      max-width: 980px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    .note { font-size: 14px; opacity: .8; margin: 0 0 12px; }
+
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 0 16px 24px;
+    }
+    .player {
+      position: relative;
+      padding-top: 56.25%;
+      height: 0;
+      overflow: hidden;
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.15);
+      background: rgba(0,0,0,.08);
+    }
+    .player iframe {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    button, a.btn {
+      appearance: none;
+      border: 1px solid rgba(127,127,127,.35);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 14px;
+      text-decoration: none;
+      color: inherit;
+      background: rgba(127,127,127,.08);
+      cursor: pointer;
+    }
+    button:hover, a.btn:hover { background: rgba(127,127,127,.14); }
+    footer {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 0 16px 24px;
+      font-size: 13px;
+      opacity: .75;
+    }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>ライブ配信</h1>
+    <p class="note">
+      ライブ中でない場合はオフライン表示になります。
+    </p>
+  </header>
+
+  <main class="wrap">
+    <div class="player">
+      <iframe
+        id="ytLive"
+        src="https://www.youtube.com/embed/live_stream?channel=UCJbgL1kCXtXWVcTPwIDFS6w&autoplay=1&mute=1&playsinline=1"
+        allow="autoplay; encrypted-media; picture-in-picture"
+        allowfullscreen>
+      </iframe>
+    </div>
+
+    <div class="actions">
+      <button type="button" id="reloadBtn">再読み込み（つなぎ直し）</button>
+      <a class="btn" href="https://www.youtube.com/channel/UCJbgL1kCXtXWVcTPwIDFS6w/live" target="_blank" rel="noopener">
+        YouTube側で開く（/live）
+      </a>
+    </div>
+
+    <noscript>
+      <p style="margin-top:12px;">
+        JavaScriptが無効です。こちらからYouTubeで視聴：
+        <a href="https://www.youtube.com/channel/UCJbgL1kCXtXWVcTPwIDFS6w/live">/live</a>
+      </p>
+    </noscript>
+  </main>
+
+
+  <script>
+    // 「つなぎ直し」ボタン：iframeをリロード（RTMP再接続後の反映にも効くことが多い）
+    const iframe = document.getElementById("ytLive");
+    document.getElementById("reloadBtn").addEventListener("click", () => {
+      const src = iframe.getAttribute("src");
+      iframe.setAttribute("src", src);
+    });
+  </script>
+</body>
+</html>
