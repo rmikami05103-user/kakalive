@@ -79,11 +79,12 @@
 <body>
   <header>
     <h1>ライブ配信</h1>
-
+<!--
     <p class="note">
       ライブ中でない場合はオフライン表示になります。<br />
       <strong>都度URL差し替え</strong>をする場合は、ページURL末尾に <code>?v=VIDEO_ID</code> を付けるのが最短です（例：<code>?v=dQw4w9WgXcQ</code>）。
     </p>
+  -->
   </header>
 
   <main class="wrap">
@@ -278,13 +279,13 @@
 
     iframe.src = embedSrc;
     openBtn.href = openHref;
-
+<!--
     setStatus(
       `モード: <code>${modeLabel}</code><br>` +
       `埋め込み: <code>${embedSrc.replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</code><br>` +
       `更新方法: <code>?v=VIDEO_ID</code>（例: <code>?v=XXXXXXXXXXX</code>） または CONFIG を編集`
     );
-
+-->
     // ---- ③ 再読み込みボタン
     document.getElementById("reloadBtn").addEventListener("click", () => {
       forceReloadIframe(iframe);
