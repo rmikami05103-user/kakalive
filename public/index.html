@@ -19,12 +19,12 @@
       margin: 0 auto;
     }
     h1 { font-size: 20px; margin: 0 0 8px; }
-    .note { font-size: 14px; opacity: .8; margin: 0 0 12px; }
+    .note { font-size: 14px; opacity: .85; margin: 0 0 12px; }
 
     .wrap {
       max-width: 980px;
       margin: 0 auto;
-      padding: 0 16px 24px;
+      padding: 0 16px 18px;
     }
     .player {
       position: relative;
@@ -48,6 +48,7 @@
       gap: 10px;
       flex-wrap: wrap;
       margin-top: 12px;
+      align-items: center;
     }
     button, a.btn {
       appearance: none;
@@ -61,30 +62,35 @@
       cursor: pointer;
     }
     button:hover, a.btn:hover { background: rgba(127,127,127,.14); }
-    footer {
+
+    .status {
+      margin-top: 12px;
+      font-size: 12px;
+      opacity: .8;
       max-width: 980px;
-      margin: 0 auto;
+      margin-left: auto;
+      margin-right: auto;
       padding: 0 16px 24px;
-      font-size: 13px;
-      opacity: .75;
     }
-    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .status code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
   </style>
 </head>
 
 <body>
   <header>
     <h1>ライブ配信</h1>
+
     <p class="note">
-      ライブ中でない場合はオフライン表示になります。
+      ライブ中でない場合はオフライン表示になります。<br />
+      <strong>都度URL差し替え</strong>をする場合は、ページURL末尾に <code>?v=VIDEO_ID</code> を付けるのが最短です（例：<code>?v=dQw4w9WgXcQ</code>）。
     </p>
   </header>
 
   <main class="wrap">
     <div class="player">
       <iframe
-        id="ytLive"
-        src="https://www.youtube.com/embed/live_stream?channel=UCJbgL1kCXtXWVcTPwIDFS6w&autoplay=1&mute=1&playsinline=1"
+        id="ytFrame"
+        src="about:blank"
         allow="autoplay; encrypted-media; picture-in-picture"
         allowfullscreen>
       </iframe>
@@ -92,26 +98,196 @@
 
     <div class="actions">
       <button type="button" id="reloadBtn">再読み込み（つなぎ直し）</button>
-      <a class="btn" href="https://www.youtube.com/channel/UCJbgL1kCXtXWVcTPwIDFS6w/live" target="_blank" rel="noopener">
-        YouTube側で開く（/live）
+
+      <a class="btn" id="openOnYouTube" href="#" target="_blank" rel="noopener">
+        YouTube側で開く
       </a>
+
+      <!-- ===========================
+           手動差し替え運用（PoC向け）メモ
+           1) いちばんラク：ページURLの末尾に ?v=VIDEO_ID を付ける（HTML編集不要）
+              例）https://example.pages.dev/?v=XXXXXXXXXXX
+
+           2) HTMLを編集して固定したい場合：
+              下の CONFIG.MODE を "video" にして MANUAL_VIDEO_URL を貼り換える
+         =========================== -->
     </div>
 
     <noscript>
       <p style="margin-top:12px;">
-        JavaScriptが無効です。こちらからYouTubeで視聴：
+        JavaScriptが無効です。YouTubeで視聴：
         <a href="https://www.youtube.com/channel/UCJbgL1kCXtXWVcTPwIDFS6w/live">/live</a>
       </p>
     </noscript>
   </main>
 
+  <div class="status" id="status"></div>
 
   <script>
-    // 「つなぎ直し」ボタン：iframeをリロード（RTMP再接続後の反映にも効くことが多い）
-    const iframe = document.getElementById("ytLive");
+    /* ==========================================================
+       CONFIG（ここだけ触れば運用できるようにしてあります）
+       ========================================================== */
+
+    const CONFIG = {
+      // ▼モード切替：
+      // "channel" … 公開（Public）で「チャンネルの現在ライブ」を埋め込み（固定URL運用向き）
+      // "video"   … その都度「動画ID/URL」を埋め込み（限定公開/毎回URLが変わる運用向き）
+      MODE: "channel",
+
+      // チャンネルID（固定）
+      CHANNEL_ID: "UCJbgL1kCXtXWVcTPwIDFS6w",
+
+      // "video" モード時の手動貼り換え欄（watch / youtu.be / live / embed どれでもOK）
+      // 例: "https://www.youtube.com/watch?v=XXXXXXXXXXX"
+      // 例: "https://youtu.be/XXXXXXXXXXX"
+      // 例: "https://www.youtube.com/live/XXXXXXXXXXX"
+      // 例: "https://www.youtube.com/embed/XXXXXXXXXXX"
+      MANUAL_VIDEO_URL: "",
+
+      // 埋め込みパラメータ
+      AUTOPLAY: true,
+      MUTE: true,
+      PLAYSINLINE: true
+    };
+
+    /* ==========================================================
+       Utils
+       ========================================================== */
+
+    function getQueryParam(name) {
+      const url = new URL(window.location.href);
+      return url.searchParams.get(name);
+    }
+
+    function extractVideoId(input) {
+      if (!input) return "";
+
+      // 既にIDっぽい（11文字）ならそのまま採用
+      const trimmed = input.trim();
+      if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
+
+      // URLとして解析
+      try {
+        const u = new URL(trimmed);
+
+        // 1) https://www.youtube.com/watch?v=VIDEO_ID
+        const v = u.searchParams.get("v");
+        if (v && /^[a-zA-Z0-9_-]{11}$/.test(v)) return v;
+
+        // 2) https://youtu.be/VIDEO_ID
+        if (u.hostname.includes("youtu.be")) {
+          const id = u.pathname.split("/").filter(Boolean)[0] || "";
+          if (/^[a-zA-Z0-9_-]{11}$/.test(id)) return id;
+        }
+
+        // 3) https://www.youtube.com/embed/VIDEO_ID
+        // 4) https://www.youtube.com/live/VIDEO_ID
+        const parts = u.pathname.split("/").filter(Boolean);
+        const idxEmbed = parts.indexOf("embed");
+        if (idxEmbed >= 0 && parts[idxEmbed + 1] && /^[a-zA-Z0-9_-]{11}$/.test(parts[idxEmbed + 1])) {
+          return parts[idxEmbed + 1];
+        }
+        const idxLive = parts.indexOf("live");
+        if (idxLive >= 0 && parts[idxLive + 1] && /^[a-zA-Z0-9_-]{11}$/.test(parts[idxLive + 1])) {
+          return parts[idxLive + 1];
+        }
+
+        return "";
+      } catch {
+        return "";
+      }
+    }
+
+    function buildEmbedParams() {
+      const p = new URLSearchParams();
+      if (CONFIG.AUTOPLAY) p.set("autoplay", "1");
+      if (CONFIG.MUTE) p.set("mute", "1");
+      if (CONFIG.PLAYSINLINE) p.set("playsinline", "1");
+      return p.toString();
+    }
+
+    function buildChannelEmbedSrc() {
+      const params = buildEmbedParams();
+      const base = `https://www.youtube.com/embed/live_stream?channel=${CONFIG.CHANNEL_ID}`;
+      return params ? `${base}&${params}` : base;
+    }
+
+    function buildVideoEmbedSrc(videoId) {
+      const params = buildEmbedParams();
+      const base = `https://www.youtube.com/embed/${videoId}`;
+      return params ? `${base}?${params}` : base;
+    }
+
+    function setStatus(html) {
+      document.getElementById("status").innerHTML = html;
+    }
+
+    function forceReloadIframe(iframe) {
+      // 同じsrcを入れ直すだけだと効かないことがあるので、ダミーパラメータで確実にリロード
+      const current = new URL(iframe.src, window.location.href);
+      current.searchParams.set("_r", String(Date.now()));
+      iframe.src = current.toString();
+    }
+
+    /* ==========================================================
+       Main
+       ========================================================== */
+
+    const iframe = document.getElementById("ytFrame");
+    const openBtn = document.getElementById("openOnYouTube");
+
+    // ---- ① URLパラメータで上書き（PoCの最短運用）
+    // ?v=VIDEO_ID を付けたら video モードとして扱う（HTML編集不要）
+    const qpV = getQueryParam("v");
+    const qpUrl = getQueryParam("url"); // 任意：?url=... でもOK（URLエンコード推奨）
+
+    let mode = CONFIG.MODE;
+    let videoId = "";
+
+    if (qpV) {
+      mode = "video";
+      videoId = extractVideoId(qpV);
+    } else if (qpUrl) {
+      mode = "video";
+      videoId = extractVideoId(qpUrl);
+    } else if (CONFIG.MODE === "video") {
+      videoId = extractVideoId(CONFIG.MANUAL_VIDEO_URL);
+    }
+
+    // ---- ② 埋め込み先を決定
+    let embedSrc = "";
+    let openHref = "";
+    let modeLabel = "";
+
+    if (mode === "video") {
+      if (!videoId) {
+        // 動画IDが未設定なら、チャンネルモードにフォールバック（事故防止）
+        embedSrc = buildChannelEmbedSrc();
+        openHref = `https://www.youtube.com/channel/${CONFIG.CHANNEL_ID}/live`;
+        modeLabel = "channel（video未設定のためフォールバック）";
+      } else {
+        embedSrc = buildVideoEmbedSrc(videoId);
+        openHref = `https://www.youtube.com/watch?v=${videoId}`;
+        modeLabel = `video（${videoId}）`;
+      }
+    } else {
+      embedSrc = buildChannelEmbedSrc();
+      openHref = `https://www.youtube.com/channel/${CONFIG.CHANNEL_ID}/live`;
+      modeLabel = "channel（チャンネル現在ライブ）";
+    }
+
+    iframe.src = embedSrc;
+    openBtn.href = openHref;
+
+    setStatus(
+      `モード: <code>${modeLabel}</code><br>` +
+      `埋め込み: <code>${embedSrc.replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</code><br>` +
+      `更新方法: <code>?v=VIDEO_ID</code>（例: <code>?v=XXXXXXXXXXX</code>） または CONFIG を編集`
+    );
+
+    // ---- ③ 再読み込みボタン
     document.getElementById("reloadBtn").addEventListener("click", () => {
-      const src = iframe.getAttribute("src");
-      iframe.setAttribute("src", src);
+      forceReloadIframe(iframe);
     });
   </script>
 </body>
