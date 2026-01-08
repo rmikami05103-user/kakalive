@@ -73,18 +73,91 @@
       padding: 0 16px 24px;
     }
     .status code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+    /* ==========================================================
+       追加: 駐車場ダッシュボード（混雑ゲージ + 模式図）
+       ========================================================== */
+    .dash {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    @media (min-width: 860px) {
+      .dash { grid-template-columns: 1fr 1fr; }
+    }
+    .card {
+      border: 1px solid rgba(127,127,127,.25);
+      border-radius: 14px;
+      padding: 12px;
+      background: rgba(127,127,127,.06);
+    }
+    .cardTitle { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+    .sub { font-size: 12px; opacity: .8; margin-top: 6px; }
+    .sub strong { font-weight: 800; }
+
+    /* --- ゲージ --- */
+    .gaugeRow { display:flex; gap:10px; align-items:center; }
+    .gauge {
+      flex: 1;
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(127,127,127,.18);
+      overflow: hidden;
+      position: relative;
+    }
+    .gaugeFill {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      transition: width .4s ease;
+      background: var(--occColor, #3b82f6); /* 青がデフォ */
+    }
+    .gaugeNum { font-variant-numeric: tabular-nums; font-weight: 800; min-width: 72px; text-align: right; }
+
+    .badge {
+      display:inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid rgba(127,127,127,.25);
+      background: rgba(127,127,127,.10);
+    }
+
+    /* --- 模式図（グリッド） --- */
+    .legend { display:flex; gap:10px; flex-wrap:wrap; font-size:12px; opacity:.85; margin-bottom: 8px; }
+    .dot { width:10px; height:10px; border-radius: 3px; display:inline-block; margin-right:6px; vertical-align: -1px; }
+    .lotGrid {
+      display: grid;
+      gap: 6px;
+      grid-template-columns: repeat(var(--cols, 10), 1fr);
+    }
+    .slot {
+      aspect-ratio: 1.6 / 1;
+      border-radius: 8px;
+      border: 1px solid rgba(127,127,127,.25);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      user-select:none;
+    }
+    .slot.free { background: rgba(34,197,94,.20); }
+    .slot.occupied { background: rgba(239,68,68,.18); }
+    .slot.unknown { background: rgba(127,127,127,.12); }
   </style>
 </head>
 
 <body>
   <header>
     <h1>ライブ配信</h1>
-<!--
+    <!--
     <p class="note">
       ライブ中でない場合はオフライン表示になります。<br />
       <strong>都度URL差し替え</strong>をする場合は、ページURL末尾に <code>?v=VIDEO_ID</code> を付けるのが最短です（例：<code>?v=dQw4w9WgXcQ</code>）。
     </p>
-  -->
+    -->
   </header>
 
   <main class="wrap">
@@ -96,6 +169,41 @@
         allowfullscreen>
       </iframe>
     </div>
+
+    <!-- 追加: 混雑インジケータ + 空き枠模式図 -->
+    <section class="dash" aria-label="駐車場状況">
+      <div class="card">
+        <div class="cardTitle">駐車場 混雑インジケータ</div>
+
+        <div class="gaugeRow">
+          <div class="gauge" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="gaugeFill" id="occFill"></div>
+          </div>
+          <div class="gaugeNum"><span id="occPct">--</span>%</div>
+        </div>
+
+        <div class="sub">
+          状態: <span class="badge" id="occLevel">取得中…</span>
+        </div>
+        <div class="sub">
+          空き: <strong><span id="freeCount">--</span></strong> / <span id="totalCount">--</span>
+        </div>
+        <div class="sub">最終更新: <span id="occUpdated">--</span></div>
+      </div>
+
+      <div class="card">
+        <div class="cardTitle">空き状況（模式図）</div>
+
+        <div class="legend" aria-label="凡例">
+          <span><span class="dot" style="background: rgba(34,197,94,.55)"></span>空き</span>
+          <span><span class="dot" style="background: rgba(239,68,68,.45)"></span>使用中</span>
+          <span><span class="dot" style="background: rgba(127,127,127,.35)"></span>不明</span>
+        </div>
+
+        <div class="lotGrid" id="lotGrid" style="--cols:10"></div>
+        <div class="sub" id="lotNote">※模式図（カメラ画角内）</div>
+      </div>
+    </section>
 
     <div class="actions">
       <button type="button" id="reloadBtn">再読み込み（つなぎ直し）</button>
@@ -149,6 +257,25 @@
       AUTOPLAY: true,
       MUTE: true,
       PLAYSINLINE: true
+    };
+
+    /* ==========================================================
+       追加: 駐車場ダッシュボード設定
+       ========================================================== */
+    const PARKING_UI = {
+      // まずはダミーJSONでUI確認 → 次にWorker等の本番URLへ差し替え
+      // 例）"/parking_status.json"（同一リポジトリに置く）
+      // 例）"https://xxx.workers.dev/api/parking"
+      API_URL: "/parking_status.json",
+      POLL_MS: 5000,
+
+      // 色境界（%）
+      THRESHOLD_YELLOW: 60,
+      THRESHOLD_RED: 85,
+
+      // 模式図の枠数（APIがslotsを返さない場合の仮）
+      MAP_TOTAL_SLOTS: 60,
+      MAP_COLS: 10
     };
 
     /* ==========================================================
@@ -230,8 +357,143 @@
       iframe.src = current.toString();
     }
 
+    function fmtTime(iso) {
+      try {
+        const d = new Date(iso);
+        return isNaN(d.getTime()) ? "--" : d.toLocaleString();
+      } catch { return "--"; }
+    }
+
     /* ==========================================================
-       Main
+       駐車場UI（混雑ゲージ + 模式図）
+       ========================================================== */
+
+    function calcOccPct(data) {
+      if (!data) return null;
+      if (typeof data.occupancyPct === "number") return Math.max(0, Math.min(100, data.occupancyPct));
+      const total = Number(data.total);
+      const occ = Number(data.occupied);
+      if (!total || total <= 0 || isNaN(total) || isNaN(occ)) return null;
+      return Math.max(0, Math.min(100, Math.round((occ / total) * 100)));
+    }
+
+    function occLevel(pct) {
+      if (pct == null) return { label: "不明", color: "#64748b" };
+      if (pct >= PARKING_UI.THRESHOLD_RED) return { label: "混雑", color: "#ef4444" };
+      if (pct >= PARKING_UI.THRESHOLD_YELLOW) return { label: "やや混雑", color: "#f59e0b" };
+      return { label: "空きあり", color: "#3b82f6" };
+    }
+
+    function setGauge(pct, updatedAt, total, occupied) {
+      const fill = document.getElementById("occFill");
+      const pctEl = document.getElementById("occPct");
+      const lvlEl = document.getElementById("occLevel");
+      const updEl = document.getElementById("occUpdated");
+      const totalEl = document.getElementById("totalCount");
+      const freeEl = document.getElementById("freeCount");
+
+      const lvl = occLevel(pct);
+      fill.style.setProperty("--occColor", lvl.color);
+      fill.style.width = (pct == null ? 0 : pct) + "%";
+
+      pctEl.textContent = pct == null ? "--" : String(pct);
+      lvlEl.textContent = pct == null ? "取得失敗/不明" : lvl.label;
+      updEl.textContent = fmtTime(updatedAt);
+
+      const t = (typeof total === "number" && isFinite(total) && total > 0) ? total : null;
+      const o = (typeof occupied === "number" && isFinite(occupied) && occupied >= 0) ? occupied : null;
+
+      if (t != null && o != null) {
+        totalEl.textContent = String(t);
+        freeEl.textContent = String(Math.max(0, t - o));
+      } else {
+        totalEl.textContent = "--";
+        freeEl.textContent = "--";
+      }
+
+      // a11y
+      fill.parentElement.setAttribute("aria-valuenow", String(pct == null ? 0 : pct));
+    }
+
+    function buildGridOnce(total, cols) {
+      const grid = document.getElementById("lotGrid");
+      grid.style.setProperty("--cols", String(cols));
+      grid.innerHTML = "";
+      for (let i = 1; i <= total; i++) {
+        const id = String(i).padStart(3, "0");
+        const cell = document.createElement("div");
+        cell.className = "slot unknown";
+        cell.dataset.slotId = id;
+        cell.textContent = id;
+        grid.appendChild(cell);
+      }
+    }
+
+    function updateGrid(slots) {
+      // slots: [{id:"001", state:"free"|"occupied"}]
+      const map = new Map();
+      (slots || []).forEach(s => {
+        if (!s || s.id == null) return;
+        const id = String(s.id).padStart(3, "0");
+        map.set(id, s.state);
+      });
+
+      const grid = document.getElementById("lotGrid");
+      grid.querySelectorAll(".slot").forEach(cell => {
+        const id = cell.dataset.slotId;
+        const st = map.get(id);
+        cell.classList.remove("free", "occupied", "unknown");
+        if (st === "free") cell.classList.add("free");
+        else if (st === "occupied") cell.classList.add("occupied");
+        else cell.classList.add("unknown");
+        cell.title = `枠 ${id}: ${st || "unknown"}`;
+      });
+    }
+
+    async function fetchParking() {
+      const url = new URL(PARKING_UI.API_URL, window.location.href);
+      url.searchParams.set("_t", String(Date.now())); // キャッシュ回避
+      const res = await fetch(url.toString(), { cache: "no-store" });
+      if (!res.ok) throw new Error(`parking api ${res.status}`);
+      return await res.json();
+    }
+
+    async function tickParking() {
+      try {
+        const data = await fetchParking();
+
+        const pct = calcOccPct(data);
+        const total = (data.total != null) ? Number(data.total) : PARKING_UI.MAP_TOTAL_SLOTS;
+        const occupied = (data.occupied != null) ? Number(data.occupied) : null;
+
+        setGauge(pct, data.updatedAt, isFinite(total) ? total : null, isFinite(occupied) ? occupied : null);
+
+        const cols = PARKING_UI.MAP_COLS;
+        const grid = document.getElementById("lotGrid");
+
+        if (!grid.hasChildNodes()) {
+          buildGridOnce(isFinite(total) && total > 0 ? total : PARKING_UI.MAP_TOTAL_SLOTS, cols);
+        }
+
+        // slotsが無い場合はunknownのまま（PoC段階ではOK）
+        updateGrid(data.slots || []);
+        document.getElementById("lotNote").textContent = "※模式図（カメラ画角内）";
+      } catch (e) {
+        setGauge(null, null, null, null);
+        document.getElementById("lotNote").textContent = "※取得失敗（API未接続/停止/通信）";
+        console.warn(e);
+      }
+    }
+
+    function initParkingDashboard() {
+      // 初期表示：枠だけ先に描く（API未接続でも見た目が崩れない）
+      buildGridOnce(PARKING_UI.MAP_TOTAL_SLOTS, PARKING_UI.MAP_COLS);
+      tickParking();
+      setInterval(tickParking, PARKING_UI.POLL_MS);
+    }
+
+    /* ==========================================================
+       Main（YouTube埋め込み + ボタン + 駐車場UI起動）
        ========================================================== */
 
     const iframe = document.getElementById("ytFrame");
@@ -279,17 +541,23 @@
 
     iframe.src = embedSrc;
     openBtn.href = openHref;
-<!--
+
+    // デバッグ表示を出したい時だけ有効化してください
+    /*
     setStatus(
       `モード: <code>${modeLabel}</code><br>` +
       `埋め込み: <code>${embedSrc.replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</code><br>` +
       `更新方法: <code>?v=VIDEO_ID</code>（例: <code>?v=XXXXXXXXXXX</code>） または CONFIG を編集`
     );
--->
+    */
+
     // ---- ③ 再読み込みボタン
     document.getElementById("reloadBtn").addEventListener("click", () => {
       forceReloadIframe(iframe);
     });
+
+    // ---- ④ 駐車場ダッシュボード起動
+    initParkingDashboard();
   </script>
 </body>
 </html>

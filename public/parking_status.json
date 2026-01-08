@@ -1,0 +1,11 @@
+{
+  "updatedAt": "2026-01-08T08:10:00+09:00",
+  "total": 60,
+  "occupied": 37,
+  "slots": [
+    { "id": "001", "state": "occupied" },
+    { "id": "002", "state": "free" },
+    { "id": "003", "state": "occupied" },
+    { "id": "004", "state": "free" }
+  ]
+}
