@@ -3,190 +3,43 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>ライブ配信</title>
-  <meta name="description" content="YouTubeライブ配信の埋め込み視聴ページです。" />
+  <title>KAKALIVE | 駐車場ライブ</title>
+  <meta name="description" content="病院駐車場のライブ映像と、混雑インジケータ、近隣駐車場マップを表示します。" />
 
-  <style>
-    :root { color-scheme: light dark; }
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
-      line-height: 1.6;
-    }
-    header {
-      padding: 16px 16px 8px;
-      max-width: 980px;
-      margin: 0 auto;
-    }
-    h1 { font-size: 20px; margin: 0 0 8px; }
-    .note { font-size: 14px; opacity: .85; margin: 0 0 12px; }
+  <link rel="stylesheet" href="/assets/styles.css">
 
-    .wrap {
-      max-width: 980px;
-      margin: 0 auto;
-      padding: 0 16px 18px;
-    }
-    .player {
-      position: relative;
-      padding-top: 56.25%;
-      height: 0;
-      overflow: hidden;
-      border-radius: 14px;
-      box-shadow: 0 8px 24px rgba(0,0,0,.15);
-      background: rgba(0,0,0,.08);
-    }
-    .player iframe {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      border: 0;
-    }
-
-    .actions {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      margin-top: 12px;
-      align-items: center;
-    }
-    button, a.btn {
-      appearance: none;
-      border: 1px solid rgba(127,127,127,.35);
-      border-radius: 10px;
-      padding: 10px 12px;
-      font-size: 14px;
-      text-decoration: none;
-      color: inherit;
-      background: rgba(127,127,127,.08);
-      cursor: pointer;
-    }
-    button:hover, a.btn:hover { background: rgba(127,127,127,.14); }
-
-    .status {
-      margin-top: 12px;
-      font-size: 12px;
-      opacity: .8;
-      max-width: 980px;
-      margin-left: auto;
-      margin-right: auto;
-      padding: 0 16px 24px;
-    }
-    .status code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-
-    /* ==========================================================
-       追加: 駐車場ダッシュボード（混雑ゲージ + 模式図）
-       ========================================================== */
-    .dash {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 12px;
-      margin-top: 12px;
-    }
-    @media (min-width: 860px) {
-      .dash { grid-template-columns: 1fr 1fr; }
-    }
-    .card {
-      border: 1px solid rgba(127,127,127,.25);
-      border-radius: 14px;
-      padding: 12px;
-      background: rgba(127,127,127,.06);
-    }
-    .cardTitle { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
-    .sub { font-size: 12px; opacity: .8; margin-top: 6px; }
-    .sub strong { font-weight: 800; }
-
-    /* --- ゲージ --- */
-    .gaugeRow { display:flex; gap:10px; align-items:center; }
-    .gauge {
-      flex: 1;
-      height: 12px;
-      border-radius: 999px;
-      background: rgba(127,127,127,.18);
-      overflow: hidden;
-      position: relative;
-    }
-    .gaugeFill {
-      height: 100%;
-      width: 0%;
-      border-radius: 999px;
-      transition: width .4s ease;
-      background: var(--occColor, #3b82f6); /* 青がデフォ */
-    }
-    .gaugeNum { font-variant-numeric: tabular-nums; font-weight: 800; min-width: 72px; text-align: right; }
-
-    .badge {
-      display:inline-block;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 12px;
-      border: 1px solid rgba(127,127,127,.25);
-      background: rgba(127,127,127,.10);
-    }
-
-    /* --- 模式図（グリッド） --- */
-    .legend { display:flex; gap:10px; flex-wrap:wrap; font-size:12px; opacity:.85; margin-bottom: 8px; }
-    .dot { width:10px; height:10px; border-radius: 3px; display:inline-block; margin-right:6px; vertical-align: -1px; }
-    .lotGrid {
-      display: grid;
-      gap: 6px;
-      grid-template-columns: repeat(var(--cols, 10), 1fr);
-    }
-    .slot {
-      aspect-ratio: 1.6 / 1;
-      border-radius: 8px;
-      border: 1px solid rgba(127,127,127,.25);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-size: 11px;
-      font-variant-numeric: tabular-nums;
-      user-select:none;
-    }
-    .slot.free { background: rgba(34,197,94,.20); }
-    .slot.occupied { background: rgba(239,68,68,.18); }
-    .slot.unknown { background: rgba(127,127,127,.12); }
-
-    .mapWrap{
-      position:relative;
-      width:100%;
-      height:420px;       /* 患者向けは縦を確保すると見やすい */
-      border-radius:14px;
-      overflow:hidden;
-      border:1px solid rgba(127,127,127,.25);
-    }
-    .mapWrap iframe{
-      position:absolute;
-      inset:0;
-      width:100%;
-      height:100%;
-      border:0;
-    }
-  </style>
+  <!-- Leaflet（地図表示） -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 
 <body>
-  <header>
-    <h1>ライブ配信</h1>
-    <!--
-    <p class="note">
-      ライブ中でない場合はオフライン表示になります。<br />
-      <strong>都度URL差し替え</strong>をする場合は、ページURL末尾に <code>?v=VIDEO_ID</code> を付けるのが最短です（例：<code>?v=dQw4w9WgXcQ</code>）。
-    </p>
-    -->
+  <header class="header">
+    <div class="wrap">
+      <h1 class="title">ライブ配信</h1>
+      <p class="lead">
+        病院駐車場の現在状況（画角内・主要エリア）と、近隣駐車場を確認できます。
+      </p>
+    </div>
   </header>
 
   <main class="wrap">
-    <div class="player">
-      <iframe
-        id="ytFrame"
-        src="about:blank"
-        allow="autoplay; encrypted-media; picture-in-picture"
-        allowfullscreen>
-      </iframe>
-    </div>
+    <!-- YouTube -->
+    <section class="card">
+      <div class="player">
+        <iframe
+          id="ytFrame"
+          src="about:blank"
+          allow="autoplay; encrypted-media; picture-in-picture"
+          allowfullscreen></iframe>
+      </div>
 
-    <!-- 追加: 混雑インジケータ + 空き枠模式図 -->
+      <div class="actions">
+        <button type="button" id="reloadBtn">再読み込み（つなぎ直し）</button>
+        <a class="btn" id="openOnYouTube" href="#" target="_blank" rel="noopener">YouTube側で開く</a>
+      </div>
+    </section>
+
+    <!-- ダッシュボード（混雑＋模式図） -->
     <section class="dash" aria-label="駐車場状況">
       <div class="card">
         <div class="cardTitle">駐車場 混雑インジケータ</div>
@@ -198,12 +51,8 @@
           <div class="gaugeNum"><span id="occPct">--</span>%</div>
         </div>
 
-        <div class="sub">
-          状態: <span class="badge" id="occLevel">取得中…</span>
-        </div>
-        <div class="sub">
-          空き: <strong><span id="freeCount">--</span></strong> / <span id="totalCount">--</span>
-        </div>
+        <div class="sub">状態: <span class="badge" id="occLevel">取得中…</span></div>
+        <div class="sub">空き: <strong><span id="freeCount">--</span></strong> / <span id="totalCount">--</span></div>
         <div class="sub">最終更新: <span id="occUpdated">--</span></div>
       </div>
 
@@ -211,387 +60,52 @@
         <div class="cardTitle">空き状況（模式図）</div>
 
         <div class="legend" aria-label="凡例">
-          <span><span class="dot" style="background: rgba(34,197,94,.55)"></span>空き</span>
-          <span><span class="dot" style="background: rgba(239,68,68,.45)"></span>使用中</span>
-          <span><span class="dot" style="background: rgba(127,127,127,.35)"></span>不明</span>
+          <span><span class="dot dotFree"></span>空き</span>
+          <span><span class="dot dotOcc"></span>使用中</span>
+          <span><span class="dot dotUnk"></span>不明</span>
         </div>
 
-        <div class="lotGrid" id="lotGrid" style="--cols:10"></div>
+        <div class="lotGrid" id="lotGrid"></div>
         <div class="sub" id="lotNote">※模式図（カメラ画角内）</div>
       </div>
-        <div class="cardTitle">近隣駐車場マップ</div>
-
-          <div class="mapWrap">
-            <iframe
-              title="近隣の駐車場マップ（ロケスマ）"
-              src="https://www.locationsmart.org/?tag=_service_parking&lat=35.344669744946366&lon=139.51592005954566&z=16"
-              loading="lazy"
-              referrerpolicy="no-referrer-when-downgrade"
-              allowfullscreen>
-            </iframe>
-          </div>
-
-          <div class="sub">
-            表示されない場合は、埋め込み制限の可能性があります（下のリンクで別タブ表示に切替）。
-            <a href="https://www.locationsmart.org/?tag=_service_parking&lat=35.344669744946366&lon=139.51592005954566&z=16"
-              target="_blank" rel="noopener">ロケスマを別タブで開く</a>
-          </div>
-
     </section>
 
-    <div class="actions">
-      <button type="button" id="reloadBtn">再読み込み（つなぎ直し）</button>
+    <!-- 近隣駐車場マップ（方式B） -->
+    <section class="card">
+      <div class="cardTitle">近隣駐車場マップ</div>
 
-      <a class="btn" id="openOnYouTube" href="#" target="_blank" rel="noopener">
-        YouTube側で開く
-      </a>
+      <div class="mapTop">
+        <button type="button" class="btn" id="toggleMapInteract">地図を操作する</button>
+        <div class="subInline">
+          半径 <span id="radiusLabel">--</span>m 以内の駐車場（OpenStreetMap）
+        </div>
+      </div>
 
-      <!-- ===========================
-           手動差し替え運用（PoC向け）メモ
-           1) いちばんラク：ページURLの末尾に ?v=VIDEO_ID を付ける（HTML編集不要）
-              例）https://example.pages.dev/?v=XXXXXXXXXXX
+      <div class="mapWrap locked" id="mapWrap">
+        <div id="nearbyMap" class="map"></div>
+        <div class="mapHint" id="mapHint">※スクロール誤動作防止のため初期は操作OFF</div>
+      </div>
 
-           2) HTMLを編集して固定したい場合：
-              下の CONFIG.MODE を "video" にして MANUAL_VIDEO_URL を貼り換える
-         =========================== -->
-    </div>
+      <div class="sub">
+        ※地図/駐車場情報は OpenStreetMap の公開データを参照します。記載の有無や内容は最新でない場合があります。
+      </div>
 
-    <noscript>
-      <p style="margin-top:12px;">
-        JavaScriptが無効です。YouTubeで視聴：
-        <a href="https://www.youtube.com/channel/UCJbgL1kCXtXWVcTPwIDFS6w/live">/live</a>
-      </p>
-    </noscript>
+      <div class="listTitle">近い順（上位10件）</div>
+      <div id="parkingList" class="parkingList"></div>
+    </section>
+
+    <section class="card">
+      <div class="cardTitle">表示について</div>
+      <div class="sub">
+        ・混雑% と 模式図は「画角内・主要エリア」を分母とします。<br>
+        ・更新が古い場合は表示を「不明」に落とします（誤誘導防止）。
+      </div>
+    </section>
+
+    <div class="status" id="status"></div>
   </main>
 
-  <div class="status" id="status"></div>
-
-  <script>
-    /* ==========================================================
-       CONFIG（ここだけ触れば運用できるようにしてあります）
-       ========================================================== */
-
-    const CONFIG = {
-      // ▼モード切替：
-      // "channel" … 公開（Public）で「チャンネルの現在ライブ」を埋め込み（固定URL運用向き）
-      // "video"   … その都度「動画ID/URL」を埋め込み（限定公開/毎回URLが変わる運用向き）
-      MODE: "channel",
-
-      // チャンネルID（固定）
-      CHANNEL_ID: "UCJbgL1kCXtXWVcTPwIDFS6w",
-
-      // "video" モード時の手動貼り換え欄（watch / youtu.be / live / embed どれでもOK）
-      // 例: "https://www.youtube.com/watch?v=XXXXXXXXXXX"
-      // 例: "https://youtu.be/XXXXXXXXXXX"
-      // 例: "https://www.youtube.com/live/XXXXXXXXXXX"
-      // 例: "https://www.youtube.com/embed/XXXXXXXXXXX"
-      MANUAL_VIDEO_URL: "",
-
-      // 埋め込みパラメータ
-      AUTOPLAY: true,
-      MUTE: true,
-      PLAYSINLINE: true
-    };
-
-    /* ==========================================================
-       追加: 駐車場ダッシュボード設定
-       ========================================================== */
-    const PARKING_UI = {
-      // まずはダミーJSONでUI確認 → 次にWorker等の本番URLへ差し替え
-      // 例）"/parking_status.json"（同一リポジトリに置く）
-      // 例）"https://xxx.workers.dev/api/parking"
-      API_URL: "/parking_status.json",
-      POLL_MS: 5000,
-
-      // 色境界（%）
-      THRESHOLD_YELLOW: 60,
-      THRESHOLD_RED: 85,
-
-      // 模式図の枠数（APIがslotsを返さない場合の仮）
-      MAP_TOTAL_SLOTS: 60,
-      MAP_COLS: 10
-    };
-
-    /* ==========================================================
-       Utils
-       ========================================================== */
-
-    function getQueryParam(name) {
-      const url = new URL(window.location.href);
-      return url.searchParams.get(name);
-    }
-
-    function extractVideoId(input) {
-      if (!input) return "";
-
-      // 既にIDっぽい（11文字）ならそのまま採用
-      const trimmed = input.trim();
-      if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
-
-      // URLとして解析
-      try {
-        const u = new URL(trimmed);
-
-        // 1) https://www.youtube.com/watch?v=VIDEO_ID
-        const v = u.searchParams.get("v");
-        if (v && /^[a-zA-Z0-9_-]{11}$/.test(v)) return v;
-
-        // 2) https://youtu.be/VIDEO_ID
-        if (u.hostname.includes("youtu.be")) {
-          const id = u.pathname.split("/").filter(Boolean)[0] || "";
-          if (/^[a-zA-Z0-9_-]{11}$/.test(id)) return id;
-        }
-
-        // 3) https://www.youtube.com/embed/VIDEO_ID
-        // 4) https://www.youtube.com/live/VIDEO_ID
-        const parts = u.pathname.split("/").filter(Boolean);
-        const idxEmbed = parts.indexOf("embed");
-        if (idxEmbed >= 0 && parts[idxEmbed + 1] && /^[a-zA-Z0-9_-]{11}$/.test(parts[idxEmbed + 1])) {
-          return parts[idxEmbed + 1];
-        }
-        const idxLive = parts.indexOf("live");
-        if (idxLive >= 0 && parts[idxLive + 1] && /^[a-zA-Z0-9_-]{11}$/.test(parts[idxLive + 1])) {
-          return parts[idxLive + 1];
-        }
-
-        return "";
-      } catch {
-        return "";
-      }
-    }
-
-    function buildEmbedParams() {
-      const p = new URLSearchParams();
-      if (CONFIG.AUTOPLAY) p.set("autoplay", "1");
-      if (CONFIG.MUTE) p.set("mute", "1");
-      if (CONFIG.PLAYSINLINE) p.set("playsinline", "1");
-      return p.toString();
-    }
-
-    function buildChannelEmbedSrc() {
-      const params = buildEmbedParams();
-      const base = `https://www.youtube.com/embed/live_stream?channel=${CONFIG.CHANNEL_ID}`;
-      return params ? `${base}&${params}` : base;
-    }
-
-    function buildVideoEmbedSrc(videoId) {
-      const params = buildEmbedParams();
-      const base = `https://www.youtube.com/embed/${videoId}`;
-      return params ? `${base}?${params}` : base;
-    }
-
-    function setStatus(html) {
-      document.getElementById("status").innerHTML = html;
-    }
-
-    function forceReloadIframe(iframe) {
-      // 同じsrcを入れ直すだけだと効かないことがあるので、ダミーパラメータで確実にリロード
-      const current = new URL(iframe.src, window.location.href);
-      current.searchParams.set("_r", String(Date.now()));
-      iframe.src = current.toString();
-    }
-
-    function fmtTime(iso) {
-      try {
-        const d = new Date(iso);
-        return isNaN(d.getTime()) ? "--" : d.toLocaleString();
-      } catch { return "--"; }
-    }
-
-    /* ==========================================================
-       駐車場UI（混雑ゲージ + 模式図）
-       ========================================================== */
-
-    function calcOccPct(data) {
-      if (!data) return null;
-      if (typeof data.occupancyPct === "number") return Math.max(0, Math.min(100, data.occupancyPct));
-      const total = Number(data.total);
-      const occ = Number(data.occupied);
-      if (!total || total <= 0 || isNaN(total) || isNaN(occ)) return null;
-      return Math.max(0, Math.min(100, Math.round((occ / total) * 100)));
-    }
-
-    function occLevel(pct) {
-      if (pct == null) return { label: "不明", color: "#64748b" };
-      if (pct >= PARKING_UI.THRESHOLD_RED) return { label: "混雑", color: "#ef4444" };
-      if (pct >= PARKING_UI.THRESHOLD_YELLOW) return { label: "やや混雑", color: "#f59e0b" };
-      return { label: "空きあり", color: "#3b82f6" };
-    }
-
-    function setGauge(pct, updatedAt, total, occupied) {
-      const fill = document.getElementById("occFill");
-      const pctEl = document.getElementById("occPct");
-      const lvlEl = document.getElementById("occLevel");
-      const updEl = document.getElementById("occUpdated");
-      const totalEl = document.getElementById("totalCount");
-      const freeEl = document.getElementById("freeCount");
-
-      const lvl = occLevel(pct);
-      fill.style.setProperty("--occColor", lvl.color);
-      fill.style.width = (pct == null ? 0 : pct) + "%";
-
-      pctEl.textContent = pct == null ? "--" : String(pct);
-      lvlEl.textContent = pct == null ? "取得失敗/不明" : lvl.label;
-      updEl.textContent = fmtTime(updatedAt);
-
-      const t = (typeof total === "number" && isFinite(total) && total > 0) ? total : null;
-      const o = (typeof occupied === "number" && isFinite(occupied) && occupied >= 0) ? occupied : null;
-
-      if (t != null && o != null) {
-        totalEl.textContent = String(t);
-        freeEl.textContent = String(Math.max(0, t - o));
-      } else {
-        totalEl.textContent = "--";
-        freeEl.textContent = "--";
-      }
-
-      // a11y
-      fill.parentElement.setAttribute("aria-valuenow", String(pct == null ? 0 : pct));
-    }
-
-    function buildGridOnce(total, cols) {
-      const grid = document.getElementById("lotGrid");
-      grid.style.setProperty("--cols", String(cols));
-      grid.innerHTML = "";
-      for (let i = 1; i <= total; i++) {
-        const id = String(i).padStart(3, "0");
-        const cell = document.createElement("div");
-        cell.className = "slot unknown";
-        cell.dataset.slotId = id;
-        cell.textContent = id;
-        grid.appendChild(cell);
-      }
-    }
-
-    function updateGrid(slots) {
-      // slots: [{id:"001", state:"free"|"occupied"}]
-      const map = new Map();
-      (slots || []).forEach(s => {
-        if (!s || s.id == null) return;
-        const id = String(s.id).padStart(3, "0");
-        map.set(id, s.state);
-      });
-
-      const grid = document.getElementById("lotGrid");
-      grid.querySelectorAll(".slot").forEach(cell => {
-        const id = cell.dataset.slotId;
-        const st = map.get(id);
-        cell.classList.remove("free", "occupied", "unknown");
-        if (st === "free") cell.classList.add("free");
-        else if (st === "occupied") cell.classList.add("occupied");
-        else cell.classList.add("unknown");
-        cell.title = `枠 ${id}: ${st || "unknown"}`;
-      });
-    }
-
-    async function fetchParking() {
-      const url = new URL(PARKING_UI.API_URL, window.location.href);
-      url.searchParams.set("_t", String(Date.now())); // キャッシュ回避
-      const res = await fetch(url.toString(), { cache: "no-store" });
-      if (!res.ok) throw new Error(`parking api ${res.status}`);
-      return await res.json();
-    }
-
-    async function tickParking() {
-      try {
-        const data = await fetchParking();
-
-        const pct = calcOccPct(data);
-        const total = (data.total != null) ? Number(data.total) : PARKING_UI.MAP_TOTAL_SLOTS;
-        const occupied = (data.occupied != null) ? Number(data.occupied) : null;
-
-        setGauge(pct, data.updatedAt, isFinite(total) ? total : null, isFinite(occupied) ? occupied : null);
-
-        const cols = PARKING_UI.MAP_COLS;
-        const grid = document.getElementById("lotGrid");
-
-        if (!grid.hasChildNodes()) {
-          buildGridOnce(isFinite(total) && total > 0 ? total : PARKING_UI.MAP_TOTAL_SLOTS, cols);
-        }
-
-        // slotsが無い場合はunknownのまま（PoC段階ではOK）
-        updateGrid(data.slots || []);
-        document.getElementById("lotNote").textContent = "※模式図（カメラ画角内）";
-      } catch (e) {
-        setGauge(null, null, null, null);
-        document.getElementById("lotNote").textContent = "※取得失敗（API未接続/停止/通信）";
-        console.warn(e);
-      }
-    }
-
-    function initParkingDashboard() {
-      // 初期表示：枠だけ先に描く（API未接続でも見た目が崩れない）
-      buildGridOnce(PARKING_UI.MAP_TOTAL_SLOTS, PARKING_UI.MAP_COLS);
-      tickParking();
-      setInterval(tickParking, PARKING_UI.POLL_MS);
-    }
-
-    /* ==========================================================
-       Main（YouTube埋め込み + ボタン + 駐車場UI起動）
-       ========================================================== */
-
-    const iframe = document.getElementById("ytFrame");
-    const openBtn = document.getElementById("openOnYouTube");
-
-    // ---- ① URLパラメータで上書き（PoCの最短運用）
-    // ?v=VIDEO_ID を付けたら video モードとして扱う（HTML編集不要）
-    const qpV = getQueryParam("v");
-    const qpUrl = getQueryParam("url"); // 任意：?url=... でもOK（URLエンコード推奨）
-
-    let mode = CONFIG.MODE;
-    let videoId = "";
-
-    if (qpV) {
-      mode = "video";
-      videoId = extractVideoId(qpV);
-    } else if (qpUrl) {
-      mode = "video";
-      videoId = extractVideoId(qpUrl);
-    } else if (CONFIG.MODE === "video") {
-      videoId = extractVideoId(CONFIG.MANUAL_VIDEO_URL);
-    }
-
-    // ---- ② 埋め込み先を決定
-    let embedSrc = "";
-    let openHref = "";
-    let modeLabel = "";
-
-    if (mode === "video") {
-      if (!videoId) {
-        // 動画IDが未設定なら、チャンネルモードにフォールバック（事故防止）
-        embedSrc = buildChannelEmbedSrc();
-        openHref = `https://www.youtube.com/channel/${CONFIG.CHANNEL_ID}/live`;
-        modeLabel = "channel（video未設定のためフォールバック）";
-      } else {
-        embedSrc = buildVideoEmbedSrc(videoId);
-        openHref = `https://www.youtube.com/watch?v=${videoId}`;
-        modeLabel = `video（${videoId}）`;
-      }
-    } else {
-      embedSrc = buildChannelEmbedSrc();
-      openHref = `https://www.youtube.com/channel/${CONFIG.CHANNEL_ID}/live`;
-      modeLabel = "channel（チャンネル現在ライブ）";
-    }
-
-    iframe.src = embedSrc;
-    openBtn.href = openHref;
-
-    // デバッグ表示を出したい時だけ有効化してください
-    /*
-    setStatus(
-      `モード: <code>${modeLabel}</code><br>` +
-      `埋め込み: <code>${embedSrc.replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</code><br>` +
-      `更新方法: <code>?v=VIDEO_ID</code>（例: <code>?v=XXXXXXXXXXX</code>） または CONFIG を編集`
-    );
-    */
-
-    // ---- ③ 再読み込みボタン
-    document.getElementById("reloadBtn").addEventListener("click", () => {
-      forceReloadIframe(iframe);
-    });
-
-    // ---- ④ 駐車場ダッシュボード起動
-    initParkingDashboard();
-  </script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script defer src="/assets/app.js"></script>
 </body>
 </html>
