@@ -146,6 +146,22 @@
     .slot.free { background: rgba(34,197,94,.20); }
     .slot.occupied { background: rgba(239,68,68,.18); }
     .slot.unknown { background: rgba(127,127,127,.12); }
+
+    .mapWrap{
+      position:relative;
+      width:100%;
+      height:420px;       /* 患者向けは縦を確保すると見やすい */
+      border-radius:14px;
+      overflow:hidden;
+      border:1px solid rgba(127,127,127,.25);
+    }
+    .mapWrap iframe{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      border:0;
+    }
   </style>
 </head>
 
@@ -203,6 +219,24 @@
         <div class="lotGrid" id="lotGrid" style="--cols:10"></div>
         <div class="sub" id="lotNote">※模式図（カメラ画角内）</div>
       </div>
+        <div class="cardTitle">近隣駐車場マップ</div>
+
+          <div class="mapWrap">
+            <iframe
+              title="近隣の駐車場マップ（ロケスマ）"
+              src="https://www.locationsmart.org/?tag=_service_parking&lat=35.344669744946366&lon=139.51592005954566&z=16"
+              loading="lazy"
+              referrerpolicy="no-referrer-when-downgrade"
+              allowfullscreen>
+            </iframe>
+          </div>
+
+          <div class="sub">
+            表示されない場合は、埋め込み制限の可能性があります（下のリンクで別タブ表示に切替）。
+            <a href="https://www.locationsmart.org/?tag=_service_parking&lat=35.344669744946366&lon=139.51592005954566&z=16"
+              target="_blank" rel="noopener">ロケスマを別タブで開く</a>
+          </div>
+
     </section>
 
     <div class="actions">
