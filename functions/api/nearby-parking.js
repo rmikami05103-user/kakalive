@@ -1,4 +1,8 @@
-export async function onRequestGet({ request, ctx }) {
+export async function onRequestGet(context) {
+  // Pages Functions の引数名ゆれ対策
+  const request = context.request;
+  const ctx = context.ctx || context.context || null;
+
   const url = new URL(request.url);
   const lat = Number(url.searchParams.get("lat"));
   const lon = Number(url.searchParams.get("lon"));
@@ -8,23 +12,24 @@ export async function onRequestGet({ request, ctx }) {
     return json({ error: "bad params (lat/lon/radius)" }, 400);
   }
 
-  // ✅ キャッシュキー（_t が来ても無視）
+  // キャッシュキー（_t が来ても無視）
   const cacheUrl = new URL(url.toString());
   cacheUrl.searchParams.delete("_t");
   const cacheKey = new Request(cacheUrl.toString(), request);
 
-  const cache = caches.default;
-  const cached = await cache.match(cacheKey);
-  if (cached) return cached;
+  // Cache API（使えない環境もあるのでガード）
+  const cache = (typeof caches !== "undefined" && caches.default) ? caches.default : null;
+  if (cache) {
+    const cached = await cache.match(cacheKey);
+    if (cached) return cached;
+  }
 
-  // ✅ 段階的クエリ：まず node のみで軽く返す（多くはこれで十分）
   const qNodeOnly = `
 [out:json][timeout:12];
 node(around:${radius},${lat},${lon})["amenity"="parking"];
 out tags;
 `.trim();
 
-  // ✅ 余力があるときの重いクエリ（way/relation まで）
   const qAll = `
 [out:json][timeout:20];
 (
@@ -41,11 +46,9 @@ out center tags;
     "https://overpass.nchc.org.tw/api/interpreter"
   ];
 
-  // 1) 軽いクエリでまず取りに行く
   let raw = await tryOverpass(endpoints, qNodeOnly);
   let mode = "node_only";
 
-  // 2) 0件だったら重いクエリも試す（OSMはwayで入ってる駐車場もある）
   if (raw && (raw.elements || []).length === 0) {
     const rawAll = await tryOverpass(endpoints, qAll);
     if (rawAll) {
@@ -60,8 +63,6 @@ out center tags;
 
   const items = (raw.elements || []).map(el => {
     const tags = el.tags || {};
-
-    // node_only の場合は node しか来ない前提
     const center = el.type === "node"
       ? { lat: el.lat, lon: el.lon }
       : (el.center || {});
@@ -92,37 +93,6 @@ out center tags;
     }
   });
 
-  ctx.waitUntil(cache.put(cacheKey, resp.clone()));
-  return resp;
-}
-
-async function tryOverpass(endpoints, query) {
-  for (const endpoint of endpoints) {
-    try {
-      // ✅ ここで AbortController を使うとより堅牢だが、まずはシンプルに
-      const r = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
-          "user-agent": "kakalive-parking-map/1.0"
-        },
-        body: new URLSearchParams({ data: query }).toString()
-      });
-
-      if (!r.ok) continue;
-
-      const raw = await r.json();
-      return raw;
-    } catch {
-      // 次のミラーへ
-    }
-  }
-  return null;
-}
-
-function json(obj, status = 200) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: { "content-type": "application/json; charset=UTF-8" }
-  });
-}
+  // waitUntil が無い環境でも落ちないように
+  if (cache) {
+    const putPromise = cache.put(cacheKe
