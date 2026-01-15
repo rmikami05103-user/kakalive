@@ -46,21 +46,24 @@ out center tags;
     "https://overpass.nchc.org.tw/api/interpreter"
   ];
 
-  let raw = await tryOverpass(endpoints, qNodeOnly);
-  let mode = "node_only";
+let rawNode = await tryOverpass(endpoints, qNodeOnly);
+let rawAll  = await tryOverpass(endpoints, qAll);
 
-  if (raw && (raw.elements || []).length === 0) {
-    const rawAll = await tryOverpass(endpoints, qAll);
-    if (rawAll) {
-      raw = rawAll;
-      mode = "all";
-    }
-  }
+// node_only が取れなくても、all が取れればそれを優先
+let raw = null;
+let mode = "node_only";
 
-  if (!raw) {
-    return json({ error: "overpass failed (all endpoints)" }, 502);
-  }
+if (rawAll && (rawAll.elements || []).length > 0) {
+  raw = rawAll;
+  mode = "all";
+} else if (rawNode) {
+  raw = rawNode;
+  mode = "node_only";
+}
 
+if (!raw) {
+  return json({ error: "overpass failed (all endpoints)" }, 502);
+}
   const items = (raw.elements || []).map(el => {
     const tags = el.tags || {};
     const center = el.type === "node"
