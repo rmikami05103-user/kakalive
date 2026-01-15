@@ -216,7 +216,7 @@ function renderList(el, items, centerLat, centerLon) {
 
     const capBadge = capLimited ? `<span class="badge">${escapeHtml(capLimited)}</span>` : "";
 
-//    const recBadge = p._recommended ? `<span class="badge rec">病院推奨</span>` : "";
+    const recBadge = ""; // いったん非表示（外部への推奨表現を避ける） p._recommended ? `<span class="badge rec">病院推奨</span>` : "";
 
     // 最大収容量：推奨はJSON、OSMは capacity が入ってれば拾う
     const capacity = p.capacityMax ?? p.capacity ?? "";
