@@ -5,7 +5,7 @@
       "id": "rec-001",
       "name": "【病院提携】タイムズ湘南鎌倉総合病院",
       "lat": 35.34605,
-      "lon": 139.5130,
+      "lon": 139.513,
       "note": "地下駐車場",
       "url": "https://times-info.net/P14-kanagawa/C204/park-detail-BUK0028681/",
       "fee": "",
@@ -13,7 +13,7 @@
       "capLimited": "有",
       "priority": 1
     },
-   {
+    {
       "id": "rec-002",
       "name": "【病院提携】タイムズ湘南鎌倉総合病院地上部",
       "lat": 35.3428,
@@ -25,7 +25,7 @@
       "capLimited": "無",
       "priority": 2
     },
-   {
+    {
       "id": "rec-003",
       "name": "【近隣】タイムズコーナン鎌倉大船モール",
       "lat": 35.348775,
@@ -37,7 +37,7 @@
       "capLimited": "有",
       "priority": 3
     },
-   {
+    {
       "id": "rec-004",
       "name": "【近隣】三井のリパーク 鎌倉植木",
       "lat": 35.34773,
@@ -48,6 +48,6 @@
       "capacityMax": 8,
       "capLimited": "有",
       "priority": 4
-    },
+    }
   ]
 }
