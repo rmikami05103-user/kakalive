@@ -6,7 +6,6 @@ export async function onRequestGet(context) {
   const lat = Number(url.searchParams.get("lat"));
   const lon = Number(url.searchParams.get("lon"));
   const radius = Number(url.searchParams.get("radius") || 1200);
-  const debug = url.searchParams.get("debug") === "1";
 
   if (!isFinite(lat) || !isFinite(lon) || !isFinite(radius) || radius <= 0 || radius > 10000) {
     return json({ error: "bad params (lat/lon/radius)" }, 400);
@@ -23,14 +22,12 @@ export async function onRequestGet(context) {
     if (cached) return cached;
   }
 
-  // ✅ node_only は out tags; をやめて out body; にする（lat/lon を確実に含める）
   const qNodeOnly = `
 [out:json][timeout:12];
 node(around:${radius},${lat},${lon})["amenity"="parking"];
 out body;
 `.trim();
 
-  // ✅ way/relation も含める（駐車場は面で入ってることが多い）
   const qAll = `
 [out:json][timeout:20];
 (
@@ -47,26 +44,20 @@ out center tags;
     "https://overpass.nchc.org.tw/api/interpreter"
   ];
 
-  // 1) node_only を試す
+  // 1) 軽量(node)を試す
   const nodeRes = await tryOverpass(endpoints, qNodeOnly);
   const nodeItems = mapElementsToItems(nodeRes?.raw);
 
-  // 2) ✅ “itemsが0”なら all を必ず試す（raw.elements があっても lat/lon 欠損等で0になり得る）
+  // 2) itemsが0なら(all)を試す（way/relation対策）
   let mode = "node_only";
-  let usedEndpoint = nodeRes?.endpoint || null;
-  let rawCountNode = nodeRes?.raw?.elements?.length ?? null;
-  let rawCountAll = null;
-
   let finalItems = nodeItems;
 
   if (finalItems.length === 0) {
     const allRes = await tryOverpass(endpoints, qAll);
-    rawCountAll = allRes?.raw?.elements?.length ?? null;
     const allItems = mapElementsToItems(allRes?.raw);
     if (allItems.length > 0) {
       finalItems = allItems;
       mode = "all";
-      usedEndpoint = allRes?.endpoint || usedEndpoint;
     }
   }
 
@@ -77,14 +68,6 @@ out center tags;
     count: finalItems.length,
     items: finalItems
   };
-
-  if (debug) {
-    body.debug = {
-      endpoint: usedEndpoint,
-      rawCountNode,
-      rawCountAll
-    };
-  }
 
   const resp = new Response(JSON.stringify(body), {
     headers: {
@@ -104,7 +87,6 @@ out center tags;
 
 function mapElementsToItems(raw) {
   if (!raw || !Array.isArray(raw.elements)) return [];
-
   return raw.elements.map(el => {
     const tags = el.tags || {};
     const center = el.type === "node"
@@ -134,7 +116,6 @@ async function tryOverpass(endpoints, query) {
         },
         body: new URLSearchParams({ data: query }).toString()
       });
-
       if (!r.ok) continue;
       const raw = await r.json();
       return { raw, endpoint };

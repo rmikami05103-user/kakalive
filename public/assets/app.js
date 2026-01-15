@@ -1,403 +1,360 @@
-/* ==========================================================
-   設定（ここだけ触れば運用できる）
-   ========================================================== */
 const CONFIG = {
   youtube: {
-    // "channel" or "video"
-    mode: "channel",
-    channelId: "UCJbgL1kCXtXWVcTPwIDFS6w",
-    manualVideoUrl: "",
-    autoplay: true,
-    mute: true,
-    playsinline: true
+    defaultVideoId: "nXWsWO-mVmc",
   },
 
-  // 混雑インジケータ（まずは public/parking_status.json を読む想定）
-  parking: {
-    apiUrl: "/parking_status.json",
-    pollMs: 5000,
-    thresholdYellow: 60,
-    thresholdRed: 85,
-    mapTotalSlots: 60,
-    mapCols: 10
-  },
-
-  // 近隣駐車場マップ（方式B）
+  // 近隣駐車場（OSM）検索
   nearbyMap: {
     lat: 35.344669744946366,
     lon: 139.51592005954566,
-    zoom: 15,
-    radiusM: 1200,
-    topN: 10
+    radiusPrimaryM: 1200,   // 患者向け：徒歩圏
+    radiusFallbackM: 2500,  // 0件の時だけ拡張
+    maxList: 10,
+  },
+
+  // 推奨駐車場（手動）
+  recommended: {
+    url: "/recommended_parking.json",
+    maxShow: 10
+  },
+
+  // ダッシュボード（試作）
+  parking: {
+    apiUrl: "/parking_status.json",
+    pollMs: 15000
+  },
+
+  ui: {
+    showDashboard: false,  // ← 次ステップ1：テスト公開で隠すなら false
+    showNotes: false       // ← 次ステップ1：テスト公開で隠すなら false
   }
 };
 
-/* ==========================================================
-   共通ユーティリティ
-   ========================================================== */
-function $(id) { return document.getElementById(id); }
-
-function getQueryParam(name) {
-  const url = new URL(window.location.href);
-  return url.searchParams.get(name);
+// ---------- YouTube ----------
+function getVideoId() {
+  const u = new URL(location.href);
+  return u.searchParams.get("v") || CONFIG.youtube.defaultVideoId;
 }
 
-function extractVideoId(input) {
-  if (!input) return "";
-  const trimmed = input.trim();
-  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
+function setYouTubePlayer(videoId) {
+  const iframe = document.getElementById("ytPlayer");
+  const info = document.getElementById("ytInfo");
+  const openBtn = document.getElementById("btnOpenYouTube");
 
+  const src = `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?autoplay=1&mute=1&playsinline=1&rel=0`;
+  iframe.src = src;
+
+  openBtn.href = `https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
+  info.textContent = `Video ID: ${videoId}`;
+}
+
+function wireYouTubeControls() {
+  document.getElementById("btnReload").addEventListener("click", () => {
+    const id = getVideoId();
+    const iframe = document.getElementById("ytPlayer");
+    iframe.src = ""; // いったん切る
+    setTimeout(() => setYouTubePlayer(id), 50);
+  });
+}
+
+// ---------- 推奨駐車場 ----------
+async function fetchRecommended() {
   try {
-    const u = new URL(trimmed);
-    const v = u.searchParams.get("v");
-    if (v && /^[a-zA-Z0-9_-]{11}$/.test(v)) return v;
-
-    if (u.hostname.includes("youtu.be")) {
-      const id = u.pathname.split("/").filter(Boolean)[0] || "";
-      if (/^[a-zA-Z0-9_-]{11}$/.test(id)) return id;
-    }
-
-    const parts = u.pathname.split("/").filter(Boolean);
-    const idxEmbed = parts.indexOf("embed");
-    if (idxEmbed >= 0 && parts[idxEmbed + 1] && /^[a-zA-Z0-9_-]{11}$/.test(parts[idxEmbed + 1])) {
-      return parts[idxEmbed + 1];
-    }
-    const idxLive = parts.indexOf("live");
-    if (idxLive >= 0 && parts[idxLive + 1] && /^[a-zA-Z0-9_-]{11}$/.test(parts[idxLive + 1])) {
-      return parts[idxLive + 1];
-    }
-    return "";
+    const res = await fetch(CONFIG.recommended.url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`recommended ${res.status}`);
+    const data = await res.json();
+    const items = Array.isArray(data.items) ? data.items : [];
+    // priority昇順
+    items.sort((a,b) => (Number(a.priority)||999) - (Number(b.priority)||999));
+    return items;
   } catch {
-    return "";
+    return [];
   }
 }
 
-function buildEmbedParams() {
-  const p = new URLSearchParams();
-  if (CONFIG.youtube.autoplay) p.set("autoplay", "1");
-  if (CONFIG.youtube.mute) p.set("mute", "1");
-  if (CONFIG.youtube.playsinline) p.set("playsinline", "1");
-  return p.toString();
-}
-
-function buildChannelEmbedSrc() {
-  const params = buildEmbedParams();
-  const base = `https://www.youtube.com/embed/live_stream?channel=${CONFIG.youtube.channelId}`;
-  return params ? `${base}&${params}` : base;
-}
-
-function buildVideoEmbedSrc(videoId) {
-  const params = buildEmbedParams();
-  const base = `https://www.youtube.com/embed/${videoId}`;
-  return params ? `${base}?${params}` : base;
-}
-
-function forceReloadIframe(iframe) {
-  const current = new URL(iframe.src, window.location.href);
-  current.searchParams.set("_r", String(Date.now()));
-  iframe.src = current.toString();
-}
-
-function fmtTime(iso) {
-  try {
-    const d = new Date(iso);
-    return isNaN(d.getTime()) ? "--" : d.toLocaleString();
-  } catch { return "--"; }
-}
-
-/* ==========================================================
-   1) YouTube埋め込み
-   ========================================================== */
-function initYouTube() {
-  const iframe = $("ytFrame");
-  const openBtn = $("openOnYouTube");
-
-  const qpV = getQueryParam("v");
-  const qpUrl = getQueryParam("url");
-
-  let mode = CONFIG.youtube.mode;
-  let videoId = "";
-
-  if (qpV) {
-    mode = "video";
-    videoId = extractVideoId(qpV);
-  } else if (qpUrl) {
-    mode = "video";
-    videoId = extractVideoId(qpUrl);
-  } else if (CONFIG.youtube.mode === "video") {
-    videoId = extractVideoId(CONFIG.youtube.manualVideoUrl);
-  }
-
-  let embedSrc = "";
-  let openHref = "";
-
-  if (mode === "video") {
-    if (!videoId) {
-      embedSrc = buildChannelEmbedSrc();
-      openHref = `https://www.youtube.com/channel/${CONFIG.youtube.channelId}/live`;
-    } else {
-      embedSrc = buildVideoEmbedSrc(videoId);
-      openHref = `https://www.youtube.com/watch?v=${videoId}`;
-    }
-  } else {
-    embedSrc = buildChannelEmbedSrc();
-    openHref = `https://www.youtube.com/channel/${CONFIG.youtube.channelId}/live`;
-  }
-
-  iframe.src = embedSrc;
-  openBtn.href = openHref;
-
-  $("reloadBtn").addEventListener("click", () => forceReloadIframe(iframe));
-}
-
-/* ==========================================================
-   2) 混雑インジケータ + 模式図
-   ========================================================== */
-function calcOccPct(data) {
-  if (!data) return null;
-  if (typeof data.occupancyPct === "number") return Math.max(0, Math.min(100, data.occupancyPct));
-  const total = Number(data.total);
-  const occ = Number(data.occupied);
-  if (!total || total <= 0 || isNaN(total) || isNaN(occ)) return null;
-  return Math.max(0, Math.min(100, Math.round((occ / total) * 100)));
-}
-
-function occLevel(pct) {
-  if (pct == null) return { label: "不明", color: "#64748b" };
-  if (pct >= CONFIG.parking.thresholdRed) return { label: "混雑", color: "#ef4444" };
-  if (pct >= CONFIG.parking.thresholdYellow) return { label: "やや混雑", color: "#f59e0b" };
-  return { label: "空きあり", color: "#3b82f6" };
-}
-
-function setGauge(pct, updatedAt, total, occupied) {
-  const fill = $("occFill");
-  const pctEl = $("occPct");
-  const lvlEl = $("occLevel");
-  const updEl = $("occUpdated");
-  const totalEl = $("totalCount");
-  const freeEl = $("freeCount");
-
-  const lvl = occLevel(pct);
-  fill.style.setProperty("--occColor", lvl.color);
-  fill.style.width = (pct == null ? 0 : pct) + "%";
-
-  pctEl.textContent = pct == null ? "--" : String(pct);
-  lvlEl.textContent = pct == null ? "取得失敗/不明" : lvl.label;
-  updEl.textContent = fmtTime(updatedAt);
-
-  const t = (typeof total === "number" && isFinite(total) && total > 0) ? total : null;
-  const o = (typeof occupied === "number" && isFinite(occupied) && occupied >= 0) ? occupied : null;
-
-  if (t != null && o != null) {
-    totalEl.textContent = String(t);
-    freeEl.textContent = String(Math.max(0, t - o));
-  } else {
-    totalEl.textContent = "--";
-    freeEl.textContent = "--";
-  }
-
-  fill.parentElement.setAttribute("aria-valuenow", String(pct == null ? 0 : pct));
-}
-
-function buildGridOnce(total, cols) {
-  const grid = $("lotGrid");
-  grid.style.setProperty("--cols", String(cols));
-  grid.innerHTML = "";
-  for (let i = 1; i <= total; i++) {
-    const id = String(i).padStart(3, "0");
-    const cell = document.createElement("div");
-    cell.className = "slot unknown";
-    cell.dataset.slotId = id;
-    cell.textContent = id;
-    grid.appendChild(cell);
-  }
-}
-
-function updateGrid(slots) {
-  const map = new Map();
-  (slots || []).forEach(s => {
-    if (!s || s.id == null) return;
-    const id = String(s.id).padStart(3, "0");
-    map.set(id, s.state);
-  });
-
-  const grid = $("lotGrid");
-  grid.querySelectorAll(".slot").forEach(cell => {
-    const id = cell.dataset.slotId;
-    const st = map.get(id);
-    cell.classList.remove("free", "occupied", "unknown");
-    if (st === "free") cell.classList.add("free");
-    else if (st === "occupied") cell.classList.add("occupied");
-    else cell.classList.add("unknown");
-    cell.title = `枠 ${id}: ${st || "unknown"}`;
-  });
-}
-
-async function fetchParking() {
-  const url = new URL(CONFIG.parking.apiUrl, window.location.href);
-  const res = await fetch(url.toString(), { cache: "no-store" });
-  if (!res.ok) throw new Error(`parking api ${res.status}`);
-  return await res.json();
-}
-
-async function tickParking() {
-  try {
-    const data = await fetchParking();
-    const pct = calcOccPct(data);
-
-    const total = (data.total != null) ? Number(data.total) : CONFIG.parking.mapTotalSlots;
-    const occupied = (data.occupied != null) ? Number(data.occupied) : null;
-
-    setGauge(pct, data.updatedAt, isFinite(total) ? total : null, isFinite(occupied) ? occupied : null);
-
-    const cols = CONFIG.parking.mapCols;
-    const grid = $("lotGrid");
-    if (!grid.hasChildNodes()) buildGridOnce(isFinite(total) && total > 0 ? total : CONFIG.parking.mapTotalSlots, cols);
-
-    updateGrid(data.slots || []);
-    $("lotNote").textContent = "※模式図（カメラ画角内）";
-  } catch (e) {
-    setGauge(null, null, null, null);
-    $("lotNote").textContent = "※取得失敗（API未接続/停止/通信）";
-    console.warn(e);
-  }
-}
-
-function initParkingDashboard() {
-  buildGridOnce(CONFIG.parking.mapTotalSlots, CONFIG.parking.mapCols);
-  tickParking();
-  setInterval(tickParking, CONFIG.parking.pollMs);
-}
-
-/* ==========================================================
-   3) 近隣駐車場マップ（Leaflet + /api/nearby-parking）
-   ========================================================== */
-function haversineM(lat1, lon1, lat2, lon2) {
-  const R = 6371000;
-  const toRad = (x) => x * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-    Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c;
-}
-
-function fmtWalkMin(distM) {
-  // 80m/分（ざっくり）
-  const min = Math.max(1, Math.round(distM / 80));
-  return `${min}分`;
-}
-
-async function fetchNearbyParking() {
-  const { lat, lon, radiusM } = CONFIG.nearbyMap;
+// ---------- 近隣駐車場（OSM API） ----------
+async function fetchNearby(radiusM) {
+  const { lat, lon } = CONFIG.nearbyMap;
   const url = new URL("/api/nearby-parking", window.location.href);
   url.searchParams.set("lat", String(lat));
   url.searchParams.set("lon", String(lon));
   url.searchParams.set("radius", String(radiusM));
 
   const res = await fetch(url.toString(), { cache: "no-store" });
-  if (!res.ok) throw new Error(`nearby-parking api ${res.status}`);
+  if (!res.ok) throw new Error(`nearby api ${res.status}`);
   return await res.json();
 }
 
-function setMapInteraction(enabled) {
-  const wrap = $("mapWrap");
-  if (enabled) wrap.classList.remove("locked");
-  else wrap.classList.add("locked");
+async function fetchNearbyWithFailSafe() {
+  const badge = document.getElementById("fallbackBadge");
+  badge.style.display = "none";
+
+  const primary = CONFIG.nearbyMap.radiusPrimaryM;
+  const fallback = CONFIG.nearbyMap.radiusFallbackM;
+
+  const data1 = await fetchNearby(primary);
+  if ((data1.count || 0) > 0) return { ...data1, usedRadius: primary, usedFallback: false };
+
+  // 0件ならフェイルセーフ
+  badge.style.display = "";
+  const data2 = await fetchNearby(fallback);
+  return { ...data2, usedRadius: fallback, usedFallback: true };
 }
 
-function renderList(items) {
-  const list = $("parkingList");
-  list.innerHTML = "";
+// ---------- 距離計算 ----------
+function haversineM(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat/2)**2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+function walkMinutesFromMeters(m) {
+  // 80m/分（徒歩ざっくり）
+  return Math.max(1, Math.round(m / 80));
+}
+
+// ---------- 地図 ----------
+let map;
+let layerGroup;
+
+function initMap() {
+  const { lat, lon } = CONFIG.nearbyMap;
+
+  map = L.map("nearbyMap", { scrollWheelZoom: true }).setView([lat, lon], 15);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  layerGroup = L.layerGroup().addTo(map);
+
+  // 病院（中心点）
+  const hospitalIcon = L.divIcon({
+    className: "",
+    html: `<div style="width:14px;height:14px;border-radius:999px;background:#ef4444;border:2px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.2)"></div>`,
+    iconSize: [14,14],
+    iconAnchor: [7,7]
+  });
+  L.marker([lat, lon], { icon: hospitalIcon })
+    .addTo(layerGroup)
+    .bindPopup("現在地（病院付近）");
+}
+
+function clearMarkers() {
+  layerGroup.clearLayers();
+  // 病院マーカーは描き直し
+  const { lat, lon } = CONFIG.nearbyMap;
+  const hospitalIcon = L.divIcon({
+    className: "",
+    html: `<div style="width:14px;height:14px;border-radius:999px;background:#ef4444;border:2px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.2)"></div>`,
+    iconSize: [14,14],
+    iconAnchor: [7,7]
+  });
+  L.marker([lat, lon], { icon: hospitalIcon })
+    .addTo(layerGroup)
+    .bindPopup("現在地（病院付近）");
+}
+
+function addParkingMarker(p, opts) {
+  const icon = L.divIcon({
+    className: "",
+    html: `<div style="width:12px;height:12px;border-radius:999px;background:${opts.color};border:2px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.18)"></div>`,
+    iconSize: [12,12],
+    iconAnchor: [6,6]
+  });
+
+  const title = p.name && p.name.trim()
+    ? p.name.trim()
+    : "周辺駐車場（名称未登録）";
+
+  const lines = [];
+  lines.push(`<strong>${escapeHtml(title)}</strong>`);
+  if (p.fee) lines.push(`料金: ${escapeHtml(String(p.fee))}`);
+  if (p.operator) lines.push(`運営: ${escapeHtml(String(p.operator))}`);
+  if (p.note) lines.push(`${escapeHtml(String(p.note))}`);
+  if (p.url) lines.push(`<a href="${escapeAttr(p.url)}" target="_blank" rel="noopener">詳細</a>`);
+
+  L.marker([p.lat, p.lon], { icon }).addTo(layerGroup).bindPopup(lines.join("<br>"));
+}
+
+// ---------- リスト ----------
+function renderList(el, items, centerLat, centerLon) {
+  el.innerHTML = "";
 
   if (!items.length) {
-    list.innerHTML = `<div class="sub">近隣駐車場が見つかりませんでした（データ未登録の可能性があります）。</div>`;
+    el.innerHTML = `<div class="small">該当する駐車場が見つかりませんでした。</div>`;
     return;
   }
 
-  items.forEach(p => {
-    const div = document.createElement("div");
-    div.className = "parkingItem";
-    const name = p.name || "駐車場";
-    const dist = (typeof p.distanceM === "number") ? `${Math.round(p.distanceM)}m / 徒歩${fmtWalkMin(p.distanceM)}` : "";
-    const cap = p.capacity ? `台数: ${p.capacity}` : "";
-    const fee = p.fee ? `料金: ${p.fee}` : "";
-    const meta = [dist, cap, fee].filter(Boolean).join(" / ");
+  for (const p of items) {
+    const name = (p.name && p.name.trim()) ? p.name.trim() : "周辺駐車場（名称未登録）";
+    const distM = Math.round(haversineM(centerLat, centerLon, p.lat, p.lon));
+    const walkMin = walkMinutesFromMeters(distM);
 
-    div.innerHTML = `
-      <div class="parkingName">${escapeHtml(name)}</div>
-      <div class="parkingMeta">${escapeHtml(meta || "")}</div>
-    `;
-    list.appendChild(div);
-  });
+    const badges = [];
+    if (p._recommended) badges.push(`<span class="badge rec">病院推奨</span>`);
+
+    el.insertAdjacentHTML("beforeend", `
+      <div class="item">
+        <div class="item-title">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <strong>${escapeHtml(name)}</strong>
+            ${badges.join("")}
+          </div>
+          <div class="small">${distM}m / 徒歩${walkMin}分</div>
+        </div>
+        <div class="item-sub">
+          ${p.fee ? `<span>料金: ${escapeHtml(String(p.fee))}</span>` : ""}
+          ${p.note ? `<span>${escapeHtml(String(p.note))}</span>` : ""}
+          ${p.url ? `<a href="${escapeAttr(p.url)}" target="_blank" rel="noopener">詳細</a>` : ""}
+        </div>
+      </div>
+    `);
+  }
+}
+
+// ---------- ダッシュボード（ダミー表示） ----------
+async function fetchParkingStatus() {
+  const res = await fetch(CONFIG.parking.apiUrl, { cache: "no-store" });
+  if (!res.ok) throw new Error(`parking api ${res.status}`);
+  return await res.json();
+}
+
+function updateDashboardDummy(data) {
+  // ここは将来の解析結果で差し替える前提（今は既存ダミーJSON想定）
+  const pct = Number(data.congestionPct ?? 0);
+  const free = Number(data.free ?? 0);
+  const total = Number(data.total ?? 0);
+  const updatedAt = data.updatedAt || "";
+
+  document.getElementById("congestionPct").textContent = isFinite(pct) ? Math.round(pct) : "—";
+  document.getElementById("freeCount").textContent = isFinite(free) ? free : "—";
+  document.getElementById("totalCount").textContent = isFinite(total) ? total : "—";
+  document.getElementById("dashUpdatedAt").textContent = updatedAt || "—";
+
+  const label = pct >= 80 ? "混雑" : pct >= 50 ? "やや混雑" : "空きあり";
+  document.getElementById("congestionLabel").textContent = label;
+
+  const bar = document.getElementById("congestionBar");
+  bar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+  bar.style.background = pct >= 80 ? "var(--bad)" : pct >= 50 ? "var(--warn)" : "var(--ok)";
+
+  // 模式図（60枠ダミー）
+  const schematic = document.getElementById("schematic");
+  schematic.innerHTML = "";
+  const N = 60;
+  for (let i=1; i<=N; i++) {
+    const used = Math.random() < (pct/100); // ダミー
+    const bg = used ? "#fee2e2" : "#dcfce7";
+    schematic.insertAdjacentHTML("beforeend", `
+      <div title="${i.toString().padStart(2,"0")}"
+           style="border:1px solid var(--border); border-radius:8px; padding:6px; text-align:center; font-size:11px; background:${bg}">
+        ${i.toString().padStart(2,"0")}
+      </div>
+    `);
+  }
+}
+
+// ---------- 初期化 ----------
+async function main() {
+  // UI表示フラグ（次ステップの1に直結）
+  document.getElementById("dashboardSection").classList.toggle("hidden", !CONFIG.ui.showDashboard);
+  document.getElementById("notesSection").classList.toggle("hidden", !CONFIG.ui.showNotes);
+
+  // YouTube
+  const videoId = getVideoId();
+  setYouTubePlayer(videoId);
+  wireYouTubeControls();
+
+  // Map
+  initMap();
+
+  // 推奨 + OSM を取得して描画
+  const errEl = document.getElementById("nearbyErr");
+  const listEl = document.getElementById("nearbyList");
+  const { lat, lon } = CONFIG.nearbyMap;
+
+  try {
+    errEl.textContent = "";
+
+    const [recommended, nearby] = await Promise.all([
+      fetchRecommended(),
+      fetchNearbyWithFailSafe()
+    ]);
+
+    // 中心点から距離を計算してソート
+    const recItems = (recommended || [])
+      .map(x => ({ ...x, _recommended: true }))
+      .slice(0, CONFIG.recommended.maxShow);
+
+    const nearbyItems = (nearby.items || [])
+      .map(x => ({ ...x, _recommended: false }));
+
+    // 近い順
+    const byDist = (a, b) => (
+      haversineM(lat, lon, a.lat, a.lon) - haversineM(lat, lon, b.lat, b.lon)
+    );
+
+    recItems.sort(byDist);
+    nearbyItems.sort(byDist);
+
+    // リストは「推奨 → 周辺」の順で上位表示
+    const listItems = [
+      ...recItems,
+      ...nearbyItems
+    ].slice(0, CONFIG.nearbyMap.maxList);
+
+    // マーカー描画
+    clearMarkers();
+    for (const p of recItems) addParkingMarker(p, { color: "#22c55e" });   // 推奨
+    for (const p of nearbyItems) addParkingMarker(p, { color: "#3b82f6" }); // OSM
+
+    // 表示範囲調整（全マーカーが見えるように）
+    const all = [...recItems, ...nearbyItems];
+    if (all.length) {
+      const bounds = L.latLngBounds(all.map(p => [p.lat, p.lon]));
+      bounds.extend([lat, lon]);
+      map.fitBounds(bounds.pad(0.15));
+    }
+
+    // リスト描画（名称空は “名称未登録” に）
+    renderList(listEl, listItems, lat, lon);
+
+  } catch (e) {
+    console.error(e);
+    errEl.textContent = "近隣駐車場の取得に失敗しました（API/通信/制限）。時間をおいて再表示してください。";
+    listEl.innerHTML = "";
+  }
+
+  // ダッシュボード（ダミー）
+  if (CONFIG.ui.showDashboard) {
+    try {
+      const data = await fetchParkingStatus();
+      updateDashboardDummy(data);
+      setInterval(async () => {
+        try {
+          const d = await fetchParkingStatus();
+          updateDashboardDummy(d);
+        } catch {}
+      }, CONFIG.parking.pollMs);
+    } catch {
+      // ダッシュボードが落ちてもページは動くようにする
+    }
+  }
 }
 
 function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
 }
+function escapeAttr(s) { return escapeHtml(s); }
 
-async function initNearbyMap() {
-  $("radiusLabel").textContent = String(CONFIG.nearbyMap.radiusM);
-
-  // Leaflet map
-  const map = L.map("nearbyMap", { scrollWheelZoom: false }).setView([CONFIG.nearbyMap.lat, CONFIG.nearbyMap.lon], CONFIG.nearbyMap.zoom);
-
-  // タイル：PoC向け（アクセス増が見えたらタイル提供サービスへ移行推奨）
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: "&copy; OpenStreetMap contributors"
-  }).addTo(map);
-
-  // 病院（アイコン画像を使わず circleMarker にして壊れにくくする）
-  L.circleMarker([CONFIG.nearbyMap.lat, CONFIG.nearbyMap.lon], { radius: 8 }).addTo(map).bindPopup("<strong>病院</strong>");
-
-  // 操作ON/OFF（スマホ誤スクロール対策）
-  setMapInteraction(false);
-  $("toggleMapInteract").addEventListener("click", () => {
-    const locked = $("mapWrap").classList.contains("locked");
-    setMapInteraction(locked);
-    $("toggleMapInteract").textContent = locked ? "操作を終了" : "地図を操作する";
-  });
-
-  // データ取得→描画
-  const data = await fetchNearbyParking();
-  const items = (data.items || []).map(p => {
-    const d = haversineM(CONFIG.nearbyMap.lat, CONFIG.nearbyMap.lon, p.lat, p.lon);
-    return { ...p, distanceM: d };
-  }).sort((a, b) => a.distanceM - b.distanceM);
-
-  // マーカー描画（こちらも circleMarker）
-  items.forEach(p => {
-    const name = p.name || "駐車場";
-    const dist = `${Math.round(p.distanceM)}m / 徒歩${fmtWalkMin(p.distanceM)}`;
-    const cap = p.capacity ? `<br>台数: ${escapeHtml(p.capacity)}` : "";
-    const fee = p.fee ? `<br>料金: ${escapeHtml(p.fee)}` : "";
-
-    L.circleMarker([p.lat, p.lon], { radius: 7 }).addTo(map)
-      .bindPopup(`<strong>${escapeHtml(name)}</strong><br>${escapeHtml(dist)}${cap}${fee}`);
-  });
-
-  // リスト（上位N件）
-  renderList(items.slice(0, CONFIG.nearbyMap.topN));
-}
-
-/* ==========================================================
-   起動
-   ========================================================== */
-window.addEventListener("DOMContentLoaded", () => {
-  initYouTube();
-  initParkingDashboard();
-
-  initNearbyMap().catch(err => {
-    console.warn(err);
-    $("parkingList").innerHTML = `<div class="sub">近隣駐車場の取得に失敗しました（API/通信/制限）。</div>`;
-  });
-});
+main();

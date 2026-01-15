@@ -3,112 +3,101 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>KAKALIVE | 駐車場ライブ</title>
-  <meta name="description" content="病院駐車場のライブ映像と、混雑インジケータ、近隣駐車場マップを表示します。" />
+  <title>平面駐車場ライブ配信（テスト配信中）</title>
 
-  <link rel="stylesheet" href="/assets/styles.css">
-
-  <!-- Leaflet（地図表示） -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="./assets/styles.css" />
 </head>
-
 <body>
-  <header class="header">
-    <div class="wrap">
-      <h1 class="title">ライブ配信</h1>
-      <p class="lead">
-        病院駐車場の現在状況（画角内・主要エリア）と、近隣駐車場を確認できます。
-      </p>
+  <div class="container">
+    <h1>平面駐車場ライブ配信（テスト配信中）</h1>
+    <div class="small">
+      病院駐車場の現在状況（画角内）と、周辺駐車場（OpenStreetMap）を参考表示します。
     </div>
-  </header>
 
-  <main class="wrap">
-    <!-- YouTube -->
-    <section class="card">
-      <div class="player">
-        <iframe
-          id="ytFrame"
-          src="about:blank"
-          allow="autoplay; encrypted-media; picture-in-picture"
-          allowfullscreen></iframe>
+    <!-- 1) YouTubeライブ -->
+    <section class="card" style="margin-top:12px;">
+      <h2>ライブ配信</h2>
+      <div class="player-wrap">
+        <iframe id="ytPlayer" class="player" allow="autoplay; encrypted-media" allowfullscreen></iframe>
       </div>
 
-      <div class="actions">
-        <button type="button" id="reloadBtn">再読み込み（つなぎ直し）</button>
-        <a class="btn" id="openOnYouTube" href="#" target="_blank" rel="noopener">YouTube側で開く</a>
+      <div class="controls">
+        <button id="btnReload" class="primary">再読み込み（つなぎ直し）</button>
+        <a id="btnOpenYouTube" class="btn" target="_blank" rel="noopener">YouTubeで開く</a>
+      </div>
+      <div class="small" id="ytInfo"></div>
+    </section>
+
+    <!-- 2) 駐車場検索＆近い順リスト -->
+    <section class="card">
+      <h2>近隣駐車場マップ</h2>
+      <div class="legend">
+        <span class="badge rec">病院推奨</span>
+        <span class="badge">周辺駐車場（OSM）</span>
+        <span class="badge fallback" id="fallbackBadge" style="display:none;">0件のため範囲拡張（2500m）</span>
+      </div>
+
+      <div class="small" id="nearbyMeta">
+        半径 1200m（徒歩圏）を検索します。0件の場合のみ自動で 2500m に拡張します。
+      </div>
+
+      <div class="row" style="margin-top:10px;">
+        <div class="col">
+          <div id="nearbyMap" class="map"></div>
+        </div>
+
+        <div class="col">
+          <div class="small">近い順（上位10件）</div>
+          <div id="nearbyList" class="list" style="margin-top:10px;"></div>
+          <div class="small" id="nearbyErr" style="margin-top:10px;"></div>
+        </div>
       </div>
     </section>
 
-    <!-- ダッシュボード（混雑＋模式図） をコメントアウトしています。
-     ダッシュボード表示をコメントアウト中　　-->
-    <section class="dash" aria-label="駐車場状況">
-      <div class="card">
-        <div class="cardTitle">駐車場 混雑インジケータ</div>
+    <!-- 3) ダッシュボード（今はダミー。将来の混雑インジケータ＆模式図） -->
+    <section class="card" id="dashboardSection">
+      <h2>ダッシュボード（試作）</h2>
 
-        <div class="gaugeRow">
-          <div class="gauge" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-            <div class="gaugeFill" id="occFill"></div>
+      <div class="row">
+        <div class="col">
+          <div class="small">駐車場 混雑インジケータ（ダミー表示）</div>
+          <div style="margin-top:10px;">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <div class="small">状態：<span id="congestionLabel">—</span></div>
+              <div style="font-weight:700;"><span id="congestionPct">—</span>%</div>
+            </div>
+            <div style="height:10px; background:#eee; border-radius:999px; overflow:hidden; margin-top:8px;">
+              <div id="congestionBar" style="height:100%; width:0%; background:var(--warn);"></div>
+            </div>
+            <div class="small" style="margin-top:10px;">
+              空き: <span id="freeCount">—</span> / <span id="totalCount">—</span><br>
+              最終更新: <span id="dashUpdatedAt">—</span>
+            </div>
           </div>
-          <div class="gaugeNum"><span id="occPct">--</span>%</div>
         </div>
 
-        <div class="sub">状態: <span class="badge" id="occLevel">取得中…</span></div>
-        <div class="sub">空き: <strong><span id="freeCount">--</span></strong> / <span id="totalCount">--</span></div>
-        <div class="sub">最終更新: <span id="occUpdated">--</span></div>
-      </div>
-
-      <div class="card">
-        <div class="cardTitle">空き状況（模式図）</div>
-
-        <div class="legend" aria-label="凡例">
-          <span><span class="dot dotFree"></span>空き</span>
-          <span><span class="dot dotOcc"></span>使用中</span>
-          <span><span class="dot dotUnk"></span>不明</span>
+        <div class="col">
+          <div class="small">空き状況（模式図／ダミー）</div>
+          <div id="schematic" style="margin-top:10px; display:grid; grid-template-columns:repeat(10, 1fr); gap:6px;"></div>
+          <div class="small" style="margin-top:8px;">※模式図（カメラ画角内）</div>
         </div>
-
-        <div class="lotGrid" id="lotGrid"></div>
-        <div class="sub" id="lotNote">※模式図（カメラ画角内）</div>
       </div>
     </section>
 
-
-    <!-- 近隣駐車場マップ（方式B） -->
-    <section class="card">
-      <div class="cardTitle">近隣駐車場マップ</div>
-
-      <div class="mapTop">
-        <button type="button" class="btn" id="toggleMapInteract">地図を操作する</button>
-        <div class="subInline">
-          半径 <span id="radiusLabel">--</span>m 以内の駐車場（OpenStreetMap）
-        </div>
-      </div>
-
-      <div class="mapWrap locked" id="mapWrap">
-        <div id="nearbyMap" class="map"></div>
-        <div class="mapHint" id="mapHint">※スクロール誤動作防止のため初期は操作OFF</div>
-      </div>
-
-      <div class="sub">
-        ※地図/駐車場情報は OpenStreetMap の公開データを参照します。記載の有無や内容は最新でない場合があります。
-      </div>
-
-      <div class="listTitle">近い順（上位10件）</div>
-      <div id="parkingList" class="parkingList"></div>
+    <!-- 4) 注釈 -->
+    <section class="card" id="notesSection">
+      <h2>表示について</h2>
+      <ul class="small" style="margin:0; padding-left:18px;">
+        <li>混雑%と模式図は「画角内（主要エリア）」を対象とします。</li>
+        <li>周辺駐車場情報は OpenStreetMap の公開データを参照します。記載の有無や内容は最新でない場合があります。</li>
+        <li>更新が止まる場合は、再読み込み（つなぎ直し）をお試しください。</li>
+      </ul>
     </section>
 
-<!--表示の注釈をコメントアウトしています。-->
-    <section class="card">
-      <div class="cardTitle">表示について</div>
-      <div class="sub">
-        ・混雑% と 模式図は「画角内・主要エリア」を分母とします。<br>
-        ・更新が古い場合は表示を「不明」に落とします（誤誘導防止）。
-      </div>
-    </section>
-
-    <div class="status" id="status"></div>
-  </main>
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script defer src="/assets/app.js"></script>
+  <script src="./assets/app.js"></script>
 </body>
 </html>
