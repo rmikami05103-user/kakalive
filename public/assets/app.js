@@ -208,7 +208,12 @@ function renderList(el, items, centerLat, centerLon) {
     const walkMin = walkMinutesFromMeters(distM);
 
     // 上限設定（推奨のみ表示： "有" / "無" / ""）
-    const capLimited = (p._recommended && p.capLimited) ? String(p.capLimited) : "";
+    const capLimitedRaw = (p._recommended && p.capLimited) ? String(p.capLimited).trim() : "";
+    const capLimited =
+      capLimitedRaw === "有" ? "最大設定あり" :
+      capLimitedRaw === "無" ? "最大設定なし" :
+      capLimitedRaw; // それ以外の値が入ってたらそのまま出す（将来拡張用）
+
     const capBadge = capLimited ? `<span class="badge">${escapeHtml(capLimited)}</span>` : "";
 
     const recBadge = p._recommended ? `<span class="badge rec">病院推奨</span>` : "";
