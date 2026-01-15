@@ -26,7 +26,7 @@ const CONFIG = {
 
   ui: {
     showDashboard: false,  // ← 次ステップ1：テスト公開で隠すなら false
-    showNotes: false       // ← 次ステップ1：テスト公開で隠すなら false
+    showNotes: true       // ← 次ステップ1：テスト公開で隠すなら false
   }
 };
 
@@ -176,13 +176,22 @@ function addParkingMarker(p, opts) {
 
   const lines = [];
   lines.push(`<strong>${escapeHtml(title)}</strong>`);
+
+  const capacity = p.capacityMax ?? p.capacity ?? "";
+  if (capacity !== "") lines.push(`最大収容: ${escapeHtml(String(capacity))}`);
+
   if (p.fee) lines.push(`料金: ${escapeHtml(String(p.fee))}`);
   if (p.operator) lines.push(`運営: ${escapeHtml(String(p.operator))}`);
   if (p.note) lines.push(`${escapeHtml(String(p.note))}`);
+
+  const rUrl = routeUrl(p.lat, p.lon);
+  lines.push(`<a href="${escapeAttr(rUrl)}" target="_blank" rel="noopener">ルート検索</a>`);
+
   if (p.url) lines.push(`<a href="${escapeAttr(p.url)}" target="_blank" rel="noopener">詳細</a>`);
 
   L.marker([p.lat, p.lon], { icon }).addTo(layerGroup).bindPopup(lines.join("<br>"));
 }
+
 
 // ---------- リスト ----------
 function renderList(el, items, centerLat, centerLon) {
@@ -198,27 +207,41 @@ function renderList(el, items, centerLat, centerLon) {
     const distM = Math.round(haversineM(centerLat, centerLon, p.lat, p.lon));
     const walkMin = walkMinutesFromMeters(distM);
 
-    const badges = [];
-    if (p._recommended) badges.push(`<span class="badge rec">病院推奨</span>`);
+    // 上限設定（推奨のみ表示： "有" / "無" / ""）
+    const capLimited = (p._recommended && p.capLimited) ? String(p.capLimited) : "";
+    const capBadge = capLimited ? `<span class="badge">${escapeHtml(capLimited)}</span>` : "";
+
+    const recBadge = p._recommended ? `<span class="badge rec">病院推奨</span>` : "";
+
+    // 最大収容量：推奨はJSON、OSMは capacity が入ってれば拾う
+    const capacity = p.capacityMax ?? p.capacity ?? "";
+    const capacityText = capacity !== "" ? `最大収容: ${escapeHtml(String(capacity))}` : "";
+
+    const rUrl = routeUrl(p.lat, p.lon);
 
     el.insertAdjacentHTML("beforeend", `
       <div class="item">
         <div class="item-title">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <strong>${escapeHtml(name)}</strong>
-            ${badges.join("")}
+            ${recBadge}
+            ${capBadge}
           </div>
           <div class="small">${distM}m / 徒歩${walkMin}分</div>
         </div>
+
         <div class="item-sub">
+          ${capacityText ? `<span>${capacityText}</span>` : ""}
           ${p.fee ? `<span>料金: ${escapeHtml(String(p.fee))}</span>` : ""}
           ${p.note ? `<span>${escapeHtml(String(p.note))}</span>` : ""}
           ${p.url ? `<a href="${escapeAttr(p.url)}" target="_blank" rel="noopener">詳細</a>` : ""}
+          <a href="${escapeAttr(rUrl)}" target="_blank" rel="noopener">ルート</a>
         </div>
       </div>
     `);
   }
 }
+
 
 // ---------- ダッシュボード（ダミー表示） ----------
 async function fetchParkingStatus() {
@@ -356,5 +379,12 @@ function escapeHtml(s) {
   }[c]));
 }
 function escapeAttr(s) { return escapeHtml(s); }
+
+//タップしてルートURL生成関数
+function routeUrl(lat, lon) {
+  const dest = `${lat},${lon}`;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}&travelmode=driving`;
+}
+
 
 main();
