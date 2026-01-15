@@ -3,15 +3,51 @@
   "items": [
     {
       "id": "rec-001",
-      "name": "【病院推奨】提携駐車場A",
-      "lat": 35.3448,
-      "lon": 139.5162,
-      "note": "外来受付でサービス券案内",
-      "url": "",
+      "name": "【病院提携】タイムズ湘南鎌倉総合病院",
+      "lat": 35.34605,
+      "lon": 139.5130,
+      "note": "地下駐車場",
+      "url": "https://times-info.net/P14-kanagawa/C204/park-detail-BUK0028681/",
       "fee": "",
-      "capacityMax": 120,
+      "capacityMax": 170,
       "capLimited": "有",
       "priority": 1
-    }
+    },
+   {
+      "id": "rec-002",
+      "name": "【病院提携】タイムズ湘南鎌倉総合病院地上部",
+      "lat": 35.3428,
+      "lon": 139.5125,
+      "note": "ライブ中継中",
+      "url": "https://times-info.net/P14-kanagawa/C205/park-detail-BUK0048658/",
+      "fee": "",
+      "capacityMax": 167,
+      "capLimited": "無",
+      "priority": 2
+    },
+   {
+      "id": "rec-003",
+      "name": "【近隣】タイムズコーナン鎌倉大船モール",
+      "lat": 35.348775,
+      "lon": 139.5133244,
+      "note": "近隣最大規模",
+      "url": "https://times-info.net/P14-kanagawa/C204/park-detail-BUK0025323/",
+      "fee": "",
+      "capacityMax": 1441,
+      "capLimited": "有",
+      "priority": 3
+    },
+   {
+      "id": "rec-004",
+      "name": "【近隣】三井のリパーク 鎌倉植木",
+      "lat": 35.34773,
+      "lon": 139.5119087,
+      "note": "前払いチケット制",
+      "url": "https://sp.repark.jp/parking_user/time/detail/index.html?park=REP0015268&utm_source=qr&utm_medium=hpqr&utm_campaign=1",
+      "fee": "",
+      "capacityMax": 8,
+      "capLimited": "有",
+      "priority": 4
+    },
   ]
 }
