@@ -187,7 +187,7 @@ function addParkingMarker(p, opts) {
   const rUrl = routeUrl(p.lat, p.lon);
   lines.push(`<a href="${escapeAttr(rUrl)}" target="_blank" rel="noopener">ルート検索</a>`);
 
-  if (p.url) lines.push(`<a href="${escapeAttr(p.url)}" target="_blank" rel="noopener">詳細</a>`);
+  if (p.url) lines.push(`<a href="${escapeAttr(p.url)}" target="_blank" rel="noopener">公式</a>`);
 
   L.marker([p.lat, p.lon], { icon }).addTo(layerGroup).bindPopup(lines.join("<br>"));
 }
@@ -234,8 +234,9 @@ function renderList(el, items, centerLat, centerLon) {
           ${capacityText ? `<span>${capacityText}</span>` : ""}
           ${p.fee ? `<span>料金: ${escapeHtml(String(p.fee))}</span>` : ""}
           ${p.note ? `<span>${escapeHtml(String(p.note))}</span>` : ""}
-          ${p.url ? `<a href="${escapeAttr(p.url)}" target="_blank" rel="noopener">詳細</a>` : ""}
-          <a href="${escapeAttr(rUrl)}" target="_blank" rel="noopener">ルート</a>
+          ${p.url ? `<a class="btn" href="${escapeAttr(p.url)}" target="_blank" rel="noopener">公式</a>` : ""}
+          <a class="btn primary" href="${escapeAttr(rUrl)}" target="_blank" rel="noopener">ルート</a>
+
         </div>
       </div>
     `);
