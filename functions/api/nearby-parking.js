@@ -95,4 +95,41 @@ out center tags;
 
   // waitUntil が無い環境でも落ちないように
   if (cache) {
-    const putPromise = cache.put(cacheKe
+    const putPromise = cache.put(cacheKey, resp.clone());
+    if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(putPromise);
+    else {
+      // fire and forget
+      putPromise.catch(() => {});
+    }
+  }
+
+  return resp;
+}
+
+async function tryOverpass(endpoints, query) {
+  for (const endpoint of endpoints) {
+    try {
+      const r = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
+          "user-agent": "kakalive-parking-map/1.0"
+        },
+        body: new URLSearchParams({ data: query }).toString()
+      });
+
+      if (!r.ok) continue;
+      return await r.json();
+    } catch {
+      // 次へ
+    }
+  }
+  return null;
+}
+
+function json(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { "content-type": "application/json; charset=UTF-8" }
+  });
+}
