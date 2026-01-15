@@ -235,7 +235,6 @@ function updateGrid(slots) {
 
 async function fetchParking() {
   const url = new URL(CONFIG.parking.apiUrl, window.location.href);
-  url.searchParams.set("_t", String(Date.now()));
   const res = await fetch(url.toString(), { cache: "no-store" });
   if (!res.ok) throw new Error(`parking api ${res.status}`);
   return await res.json();
@@ -298,7 +297,6 @@ async function fetchNearbyParking() {
   url.searchParams.set("lat", String(lat));
   url.searchParams.set("lon", String(lon));
   url.searchParams.set("radius", String(radiusM));
-  url.searchParams.set("_t", String(Date.now())); // 体感更新用（Functions側でキャッシュしてるので負荷は軽い）
 
   const res = await fetch(url.toString(), { cache: "no-store" });
   if (!res.ok) throw new Error(`nearby-parking api ${res.status}`);
