@@ -92,6 +92,21 @@ button.primary, a.btn.primary{
   background:#eef2ff;
 }
 
+.heatmap-note{
+  margin-bottom: 10px;
+}
+.heatmap-wrap{
+  border:1px solid var(--border);
+  border-radius: 12px;
+  overflow:hidden;
+  background:#fff;
+}
+.heatmap-image{
+  width:100%;
+  height:auto;
+  display:block;
+}
+
 .map{
   height: 360px;
   border-radius: 12px;
